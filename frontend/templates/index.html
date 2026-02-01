@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker - Financial Analysis</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fas fa-wallet"></i>
+                <h1>ExpenseTracker</h1>
+            </div>
+            
+            <nav class="nav-menu">
+                <ul>
+                    <li><a href="#dashboard" class="nav-link active" data-page="dashboard"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+                    <li><a href="#transactions" class="nav-link" data-page="transactions"><i class="fas fa-exchange-alt"></i> Transactions</a></li>
+                    <li><a href="#budgets" class="nav-link" data-page="budgets"><i class="fas fa-piggy-bank"></i> Budgets</a></li>
+                    <li><a href="#reports" class="nav-link" data-page="reports"><i class="fas fa-chart-bar"></i> Reports</a></li>
+                    <li><a href="#upload" class="nav-link" data-page="upload"><i class="fas fa-upload"></i> Upload</a></li>
+                </ul>
+            </nav>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 id="pageTitle">Dashboard</h2>
+                </div>
+                <div class="header-right">
+                    <div class="date-selector">
+                        <select id="periodSelect" class="form-control">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly" selected>Monthly</option>
+                            <option value="annual">Annual</option>
+                        </select>
+                        <input type="month" id="monthPicker" class="form-control">
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Page Content -->
+            <div class="page-content">
+                
+                <!-- Dashboard Page -->
+                <div id="dashboard" class="page active">
+                    <div class="dashboard-grid">
+                        <div class="stats-grid">
+                            <div class="stat-card income">
+                                <i class="fas fa-arrow-down"></i>
+                                <h3>Total Income</h3>
+                                <p class="amount" id="totalIncome">$0.00</p>
+                            </div>
+                            <div class="stat-card expense">
+                                <i class="fas fa-arrow-up"></i>
+                                <h3>Total Expense</h3>
+                                <p class="amount" id="totalExpense">$0.00</p>
+                            </div>
+                            <div class="stat-card net">
+                                <i class="fas fa-balance-scale"></i>
+                                <h3>Net Balance</h3>
+                                <p class="amount" id="netBalance">$0.00</p>
+                            </div>
+                        </div>
+                        
+                        <div class="charts-grid">
+                            <div class="chart-container">
+                                <h3>Expenses by Category</h3>
+                                <canvas id="expenseChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <h3>Income by Category</h3>
+                                <canvas id="incomeChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="recent-transactions">
+                            <h3>Recent Transactions</h3>
+                            <div id="recentTransList" class="transaction-list">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Transactions Page -->
+                <div id="transactions" class="page">
+                    <div class="page-header">
+                        <div class="search-bar">
+                            <input type="text" id="searchInput" placeholder="Search transactions..." class="form-control">
+                            <button class="btn btn-primary" id="addTransBtn">
+                                <i class="fas fa-plus"></i> Add Transaction
+                            </button>
+                        </div>
+                        <div class="filters">
+                            <select id="typeFilter" class="form-control">
+                                <option value="">All Types</option>
+                                <option value="income">Income</option>
+                                <option value="expense">Expense</option>
+                            </select>
+                            <select id="categoryFilter" class="form-control">
+                                <option value="">All Categories</option>
+                                <!-- Populated by JavaScript -->
+                            </select>
+                            <select id="statusFilter" class="form-control">
+                                <option value="included">Included</option>
+                                <option value="excluded">Excluded</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="transactions-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Description</th>
+                                    <th>Category</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionsBody">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Budgets Page -->
+                <div id="budgets" class="page">
+                    <div class="page-header">
+                        <button class="btn btn-primary" id="addBudgetBtn">
+                            <i class="fas fa-plus"></i> Create Budget
+                        </button>
+                        <div class="filters">
+                            <select id="budgetTypeFilter" class="form-control">
+                                <option value="">All Categories</option>
+                                <!-- Populated by JavaScript -->
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="budgets-grid" id="budgetsGrid">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Reports Page -->
+                <div id="reports" class="page">
+                    <div class="reports-container">
+                        <div class="report-section">
+                            <h3>Spending Trends</h3>
+                            <canvas id="trendingChart" style="max-height: 300px;"></canvas>
+                        </div>
+                        
+                        <div class="report-section">
+                            <h3>Budget vs Actual</h3>
+                            <div id="budgetAnalysisContainer">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                        
+                        <div class="report-section">
+                            <h3>Category Breakdown</h3>
+                            <div id="categoryBreakdown" class="category-table">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Upload Page -->
+                <div id="upload" class="page">
+                    <div class="upload-container">
+                        <div class="upload-box">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <h3>Upload Bank Statement</h3>
+                            <p>Supported formats: CSV, Excel (XLSX, XLS)</p>
+                            
+                            <div class="upload-area" id="uploadArea">
+                                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+                                <p>Drag and drop your file here or <button type="button" class="link-btn" id="browseBtn">browse</button></p>
+                            </div>
+                            
+                            <div id="uploadPreview" class="upload-preview" style="display:none;">
+                                <h4>Preview (First 10 rows)</h4>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Description</th>
+                                            <th>Amount</th>
+                                            <th>Type</th>
+                                            <th>Category</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="previewBody">
+                                        <!-- Populated by JavaScript -->
+                                    </tbody>
+                                </table>
+                                <button class="btn btn-success" id="confirmUploadBtn">
+                                    <i class="fas fa-check"></i> Confirm Upload
+                                </button>
+                                <button class="btn btn-secondary" id="cancelUploadBtn">
+                                    <i class="fas fa-times"></i> Cancel
+                                </button>
+                            </div>
+                            
+                            <div id="uploadStatus" class="upload-status" style="display:none;">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modals -->
+    <div id="transactionModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitle">Add Transaction</h2>
+            <form id="transactionForm">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="transDate" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="transDesc" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select id="transType" class="form-control" required>
+                        <option value="">Select...</option>
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="transCategory" class="form-control" required>
+                        <option value="">Select...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input type="number" id="transAmount" class="form-control" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="transNotes" class="form-control"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save Transaction</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('transactionModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="budgetModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Create Budget</h2>
+            <form id="budgetForm">
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="budgetCategory" class="form-control" required>
+                        <option value="">Select...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Budget Amount</label>
+                    <input type="number" id="budgetAmount" class="form-control" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Period</label>
+                    <select id="budgetPeriod" class="form-control" required>
+                        <option value="">Select...</option>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="annual">Annual</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="budgetExcluded">
+                        Budget for excluded expenses
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Create Budget</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('budgetModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
