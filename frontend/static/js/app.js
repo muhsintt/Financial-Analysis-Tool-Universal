@@ -595,6 +595,72 @@ async function handleBulkDeleteFileUpload(e) {
         const formData = new FormData();
         formData.append('file', file);
 
+        // First, get a preview of transactions to be deleted
+        const previewResponse = await fetch(`${API_URL}/transactions/bulk-delete-preview/`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!previewResponse.ok) {
+            const error = await previewResponse.json();
+            throw new Error(error.error || 'Failed to preview transactions to delete');
+        }
+
+        const previewData = await previewResponse.json();
+        
+        // Store file for later confirmation
+        window.pendingDeleteFile = file;
+        window.pendingDeleteTransactions = previewData.transactions;
+        
+        // Show preview modal
+        showBulkDeletePreview(previewData.transactions);
+        
+    } catch (error) {
+        console.error('Error previewing transactions:', error);
+        alert(`Error: ${error.message}`);
+    } finally {
+        // Reset file input
+        document.getElementById('bulkDeleteFile').value = '';
+    }
+}
+
+// Show bulk delete preview in modal
+function showBulkDeletePreview(transactions) {
+    const count = transactions.length;
+    document.getElementById('previewCount').textContent = `${count} transaction(s) will be deleted:`;
+    
+    const previewDiv = document.getElementById('previewTransactions');
+    previewDiv.innerHTML = transactions.map(t => `
+        <div style="padding: 10px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
+                <div style="font-weight: 600;">${t.description}</div>
+                <div style="font-size: 12px; color: #666;">
+                    ${formatDate(t.date)} • ${t.category_name}
+                </div>
+            </div>
+            <div style="text-align: right; font-weight: 600; color: ${t.type === 'income' ? 'var(--income)' : 'var(--expense)'};">
+                ${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
+            </div>
+        </div>
+    `).join('');
+    
+    openModal('bulkDeletePreviewModal');
+}
+
+// Confirm bulk delete from file
+async function confirmBulkDeleteFromFile() {
+    if (!window.pendingDeleteFile) {
+        alert('No file pending deletion');
+        return;
+    }
+    
+    const confirmed = confirm(`Are you sure you want to permanently delete ${window.pendingDeleteTransactions.length} transaction(s)? This cannot be undone.`);
+    if (!confirmed) return;
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', window.pendingDeleteFile);
+        
         const response = await fetch(`${API_URL}/transactions/bulk-delete-by-file/`, {
             method: 'POST',
             body: formData
@@ -607,13 +673,17 @@ async function handleBulkDeleteFileUpload(e) {
 
         const result = await response.json();
         alert(`Successfully deleted ${result.deleted_count} transaction(s) from file`);
+        
+        // Clear pending data
+        window.pendingDeleteFile = null;
+        window.pendingDeleteTransactions = null;
+        
+        // Close modal and reload
+        closeModal('bulkDeletePreviewModal');
         loadTransactions();
     } catch (error) {
         console.error('Error deleting transactions from file:', error);
         alert(`Error: ${error.message}`);
-    } finally {
-        // Reset file input
-        document.getElementById('bulkDeleteFile').value = '';
     }
 }
 

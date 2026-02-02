@@ -293,6 +293,26 @@
         </div>
     </div>
     
+    <!-- Bulk Delete Preview Modal -->
+    <div id="bulkDeletePreviewModal" class="modal">
+        <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+            <span class="close" onclick="closeModal('bulkDeletePreviewModal')">&times;</span>
+            <h2>Confirm Bulk Delete</h2>
+            <p id="previewCount" style="font-size: 16px; font-weight: 600; color: var(--danger); margin-bottom: 15px;"></p>
+            
+            <div id="previewTransactions" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; border: 1px solid #e9ecef; border-radius: 5px; padding: 10px; background: #f8f9fa;">
+                <!-- Populated by JavaScript -->
+            </div>
+            
+            <div class="form-actions">
+                <button class="btn btn-danger" onclick="confirmBulkDeleteFromFile()">
+                    <i class="fas fa-trash"></i> Delete These Transactions
+                </button>
+                <button class="btn btn-secondary" onclick="closeModal('bulkDeletePreviewModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
     <div id="budgetModal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>

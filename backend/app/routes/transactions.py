@@ -203,6 +203,36 @@ def bulk_delete():
         'deleted_count': deleted_count
     })
 
+@transactions_bp.route('/bulk-delete-preview/', methods=['POST'])
+def bulk_delete_preview():
+    """Preview which transactions will be deleted from a file upload"""
+    from app.utils.file_processor import process_delete_file
+    
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    if not file or file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    try:
+        # Process the file to get transaction IDs to delete
+        transaction_ids = process_delete_file(file)
+        
+        if not transaction_ids:
+            return jsonify({'error': 'No valid transaction IDs found in file'}), 400
+        
+        # Get the transactions that would be deleted
+        transactions = Transaction.query.filter(Transaction.id.in_(transaction_ids)).all()
+        
+        return jsonify({
+            'count': len(transactions),
+            'transactions': [t.to_dict() for t in transactions]
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
 @transactions_bp.route('/bulk-delete-by-file/', methods=['POST'])
 def bulk_delete_by_file():
     """Delete transactions by uploading a file (CSV or Excel with Transaction IDs)"""
