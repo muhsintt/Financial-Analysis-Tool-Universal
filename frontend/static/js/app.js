@@ -1,5 +1,6 @@
 // API Configuration
-const API_URL = 'http://localhost:5000/api';
+const API_URL = `${window.location.protocol}//${window.location.host}/api`;
+console.log('API_URL:', API_URL);
 
 // State Management
 const state = {
@@ -22,24 +23,34 @@ const state = {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOMContentLoaded event fired');
     // Initialize month picker with current month
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     document.getElementById('monthPicker').value = `${year}-${month}`;
     
+    console.log('Initializing event listeners...');
     initializeEventListeners();
+    console.log('Initializing categories...');
     await initializeCategories();
+    console.log('Loading dashboard...');
     await loadDashboard();
+    console.log('Page initialized');
 });
 
 // Event Listeners
 function initializeEventListeners() {
     // Navigation
-    document.querySelectorAll('.nav-link').forEach(link => {
+    console.log('Setting up navigation event listeners...');
+    const navLinks = document.querySelectorAll('.nav-link');
+    console.log('Found nav links:', navLinks.length);
+    
+    navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const page = link.dataset.page;
+            console.log('Nav link clicked:', page);
             navigateTo(page);
         });
     });
@@ -152,6 +163,8 @@ function initializeEventListeners() {
 
 // Navigation
 function navigateTo(page) {
+    console.log('Navigating to:', page);
+    
     // Update active nav link
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
@@ -174,7 +187,14 @@ function navigateTo(page) {
 
     // Show/hide pages
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(page).classList.add('active');
+    const pageElement = document.getElementById(page);
+    if (pageElement) {
+        pageElement.classList.add('active');
+        console.log('Page element found and activated:', page);
+    } else {
+        console.error('Page element not found:', page);
+        return;
+    }
 
     state.currentPage = page;
 
