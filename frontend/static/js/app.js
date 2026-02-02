@@ -1465,6 +1465,20 @@ async function testRule() {
                     Category: ${result.primary_match.category_name}<br>
                     Priority: ${result.primary_match.priority}
                 </div>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <div style="padding: 10px; background: #f8d7da; border-radius: 4px; color: #721c24;">
+                    No matching rules found. Would use default category.
+                </div>
+            `;
+        }
+        
+        resultDiv.style.display = 'block';
+    } catch (error) {
+        console.error('Error testing rule:', error);
+    }
+}
 
 // API Status Management
 async function loadApiStatus() {
@@ -1567,19 +1581,5 @@ async function handleApiToggle(event) {
                 Failed to toggle API status
             </div>
         `;
-    }
-}
-            `;
-        } else {
-            resultDiv.innerHTML = `
-                <div style="padding: 10px; background: #f8d7da; border-radius: 4px; color: #721c24;">
-                    No matching rules found. Would use default category.
-                </div>
-            `;
-        }
-        
-        resultDiv.style.display = 'block';
-    } catch (error) {
-        console.error('Error testing rule:', error);
     }
 }
