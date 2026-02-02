@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Expense Tracker - Financial Analysis</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=6">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -20,10 +20,18 @@
             <nav class="nav-menu">
                 <ul>
                     <li><a href="#dashboard" class="nav-link active" data-page="dashboard"><i class="fas fa-chart-line"></i> Dashboard</a></li>
-                    <li><a href="#transactions" class="nav-link" data-page="transactions"><i class="fas fa-exchange-alt"></i> Transactions</a></li>
+                    <li class="has-submenu">
+                        <a href="#transactions" class="nav-link" data-page="transactions">
+                            <i class="fas fa-exchange-alt"></i> Transactions
+                            <i class="fas fa-chevron-down submenu-arrow"></i>
+                        </a>
+                        <ul class="submenu">
+                            <li><a href="#rules" class="nav-link sub-link" data-page="rules"><i class="fas fa-filter"></i> Categorization Rules</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="#categories" class="nav-link" data-page="categories"><i class="fas fa-tags"></i> Categories</a></li>
                     <li><a href="#budgets" class="nav-link" data-page="budgets"><i class="fas fa-piggy-bank"></i> Budgets</a></li>
                     <li><a href="#reports" class="nav-link" data-page="reports"><i class="fas fa-chart-bar"></i> Reports</a></li>
-                    <li><a href="#rules" class="nav-link" data-page="rules"><i class="fas fa-filter"></i> Categorization Rules</a></li>
                     <li><a href="#upload" class="nav-link" data-page="upload"><i class="fas fa-upload"></i> Upload</a></li>
                     <li><a href="#settings" class="nav-link" data-page="settings"><i class="fas fa-cog"></i> Settings</a></li>
                 </ul>
@@ -74,6 +82,11 @@
                                 <i class="fas fa-balance-scale"></i>
                                 <h3>Net Balance</h3>
                                 <p class="amount" id="netBalance">$0.00</p>
+                            </div>
+                            <div class="stat-card excluded">
+                                <i class="fas fa-ban"></i>
+                                <h3>Total Excluded</h3>
+                                <p class="amount" id="totalExcluded">$0.00</p>
                             </div>
                         </div>
                         
@@ -245,6 +258,18 @@
                         <button class="btn btn-primary" id="addRuleBtn">
                             <i class="fas fa-plus"></i> New Rule
                         </button>
+                        <button class="btn btn-success" id="applyRulesBtn">
+                            <i class="fas fa-sync"></i> Apply Rules
+                        </button>
+                        <div class="btn-group">
+                            <button class="btn btn-secondary" id="exportRulesBtn">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                            <button class="btn btn-secondary" id="importRulesBtn">
+                                <i class="fas fa-upload"></i> Import
+                            </button>
+                            <input type="file" id="importRulesFile" style="display: none;" accept=".json,.csv">
+                        </div>
                         <div class="search-bar" style="flex: 1; margin-left: 20px;">
                             <input type="text" id="ruleSearchInput" placeholder="Search rules..." class="form-control">
                         </div>
@@ -266,6 +291,30 @@
                                 <!-- Populated by JavaScript -->
                             </tbody>
                         </table>
+                    </div>
+                </div>
+                
+                <!-- Categories Page -->
+                <div id="categories" class="page">
+                    <div class="page-header">
+                        <button class="btn btn-primary" id="addCategoryPageBtn">
+                            <i class="fas fa-plus"></i> New Category
+                        </button>
+                    </div>
+                    
+                    <div class="category-management">
+                        <div class="category-list-section">
+                            <h3><i class="fas fa-arrow-up"></i> Expense Categories</h3>
+                            <ul id="expenseCategoryList" class="category-list">
+                                <!-- Populated by JavaScript -->
+                            </ul>
+                        </div>
+                        <div class="category-list-section">
+                            <h3><i class="fas fa-arrow-down"></i> Income Categories</h3>
+                            <ul id="incomeCategoryList" class="category-list">
+                                <!-- Populated by JavaScript -->
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 
@@ -383,13 +432,25 @@
                 </div>
                 <div class="form-group">
                     <label>Category</label>
-                    <select id="transCategory" class="form-control" required>
-                        <option value="">Select...</option>
-                    </select>
+                    <div class="category-select-wrapper">
+                        <select id="transCategory" class="form-control" required>
+                            <option value="">Select...</option>
+                        </select>
+                        <button type="button" class="btn btn-icon-sm" id="addCategoryBtn" title="Add New Category">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Amount</label>
                     <input type="number" id="transAmount" class="form-control" step="0.01" required>
+                </div>
+                <div class="form-group" id="statusGroup" style="display: none;">
+                    <label>Status</label>
+                    <select id="transStatus" class="form-control">
+                        <option value="false">Included</option>
+                        <option value="true">Excluded</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>Notes</label>
@@ -403,6 +464,53 @@
         </div>
     </div>
     
+    <!-- Category Modal -->
+    <div id="categoryModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close" onclick="closeModal('categoryModal')">&times;</span>
+            <h2 id="categoryModalTitle">Add New Category</h2>
+            <form id="categoryForm">
+                <input type="hidden" id="categoryId">
+                <input type="hidden" id="categoryParentId">
+                <div class="form-group">
+                    <label>Category Name</label>
+                    <input type="text" id="categoryName" class="form-control" placeholder="e.g., Subscriptions" required>
+                </div>
+                <div class="form-group" id="categoryTypeGroup">
+                    <label>Type</label>
+                    <select id="categoryType" class="form-control" required>
+                        <option value="">Select...</option>
+                        <option value="expense">Expense</option>
+                        <option value="income">Income</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Color</label>
+                    <input type="color" id="categoryColor" class="form-control" value="#3498db" style="height: 40px; padding: 5px;">
+                </div>
+                
+                <!-- Subcategories Section (shown only when editing parent categories) -->
+                <div class="form-group" id="subcategoriesSection" style="display: none;">
+                    <label>Subcategories</label>
+                    <div id="subcategoriesList" class="subcategories-edit-list">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                    <div class="add-subcategory-inline">
+                        <input type="text" id="newSubcategoryName" class="form-control" placeholder="New subcategory name...">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="addSubcategoryInline()">
+                            <i class="fas fa-plus"></i> Add
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="categorySubmitBtn">Create Category</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('categoryModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Bulk Delete Preview Modal -->
     <div id="bulkDeletePreviewModal" class="modal">
         <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
@@ -508,6 +616,6 @@
     </div>
     
     <!-- Scripts -->
-    <script src="/static/js/app.js?v=4"></script>
+    <script src="/static/js/app.js?v=9"></script>
 </body>
 </html>

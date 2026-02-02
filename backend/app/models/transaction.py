@@ -20,6 +20,11 @@ class Transaction(db.Model):
         return f'<Transaction {self.description} - {self.amount}>'
     
     def to_dict(self):
+        # Get full category name (with parent if subcategory)
+        category_name = None
+        if self.category:
+            category_name = self.category.full_name if hasattr(self.category, 'full_name') else self.category.name
+        
         return {
             'id': self.id,
             'description': self.description,
@@ -27,7 +32,7 @@ class Transaction(db.Model):
             'type': self.type,
             'date': self.date.isoformat(),
             'category_id': self.category_id,
-            'category_name': self.category.name if self.category else None,
+            'category_name': category_name,
             'is_excluded': self.is_excluded,
             'source': self.source,
             'notes': self.notes,

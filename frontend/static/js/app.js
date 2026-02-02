@@ -51,6 +51,14 @@ function initializeEventListeners() {
             e.preventDefault();
             const page = link.dataset.page;
             console.log('Nav link clicked:', page);
+            
+            // Handle submenu toggle for parent items
+            const parentLi = link.closest('.has-submenu');
+            if (parentLi && !link.classList.contains('sub-link')) {
+                // Toggle submenu expansion
+                parentLi.classList.toggle('expanded');
+            }
+            
             navigateTo(page);
         });
     });
@@ -68,10 +76,30 @@ function initializeEventListeners() {
     // Transaction modal
     document.getElementById('addTransBtn').addEventListener('click', () => {
         state.currentTransaction = null;
+        document.getElementById('modalTitle').textContent = 'Add Transaction';
+        document.getElementById('transactionForm').reset();
+        document.getElementById('statusGroup').style.display = 'none';
         openModal('transactionModal');
     });
 
     document.getElementById('transactionForm').addEventListener('submit', handleTransactionSubmit);
+
+    // Category modal (from transaction form)
+    document.getElementById('addCategoryBtn').addEventListener('click', () => {
+        openCategoryModal();
+        // Pre-select the type based on current transaction type selection
+        const transType = document.getElementById('transType').value;
+        if (transType) {
+            document.getElementById('categoryType').value = transType;
+        }
+    });
+
+    // Category page add button
+    document.getElementById('addCategoryPageBtn').addEventListener('click', () => {
+        openCategoryModal();
+    });
+
+    document.getElementById('categoryForm').addEventListener('submit', handleCategorySubmit);
 
     // Budget modal
     document.getElementById('addBudgetBtn').addEventListener('click', () => {
@@ -90,6 +118,12 @@ function initializeEventListeners() {
 
     document.getElementById('ruleForm').addEventListener('submit', handleRuleSubmit);
     document.getElementById('ruleTestInput').addEventListener('input', testRule);
+    document.getElementById('applyRulesBtn').addEventListener('click', applyRulesToAllTransactions);
+    document.getElementById('exportRulesBtn').addEventListener('click', exportRules);
+    document.getElementById('importRulesBtn').addEventListener('click', () => {
+        document.getElementById('importRulesFile').click();
+    });
+    document.getElementById('importRulesFile').addEventListener('change', handleRulesImport);
 
     // API Status Toggle
     const apiToggle = document.getElementById('apiToggle');
@@ -170,6 +204,11 @@ function navigateTo(page) {
         link.classList.remove('active');
         if (link.dataset.page === page) {
             link.classList.add('active');
+            // Expand parent submenu if this is a sub-link
+            const parentSubmenu = link.closest('.has-submenu');
+            if (parentSubmenu) {
+                parentSubmenu.classList.add('expanded');
+            }
         }
     });
 
@@ -177,6 +216,7 @@ function navigateTo(page) {
     const titles = {
         'dashboard': 'Dashboard',
         'transactions': 'Transactions',
+        'categories': 'Categories',
         'budgets': 'Budgets',
         'reports': 'Reports',
         'rules': 'Categorization Rules',
@@ -202,6 +242,9 @@ function navigateTo(page) {
     switch(page) {
         case 'transactions':
             loadTransactions();
+            break;
+        case 'categories':
+            loadCategoryManagement();
             break;
         case 'budgets':
             loadBudgets();
@@ -236,13 +279,18 @@ async function initializeCategories() {
 // Load Categories
 async function loadCategories() {
     try {
-        const response = await fetch(`${API_URL}/categories/`);
+        const response = await fetch(`${API_URL}/categories/?include_subcategories=true`);
         if (!response.ok) throw new Error('Failed to load categories');
         
-        state.categories = await response.json();
+        const allCategories = await response.json();
+        state.categories = allCategories;
+        
+        // Build flat list with optgroup structure for dropdowns
+        // Filter to parent categories only, with subcategories nested
+        const parentCategories = allCategories.filter(c => !c.parent_id);
         
         // Update category filters
-        const categoryFilters = ['categoryFilter', 'transCategory', 'budgetCategory', 'budgetTypeFilter'];
+        const categoryFilters = ['categoryFilter', 'transCategory', 'budgetCategory', 'budgetTypeFilter', 'ruleCategory'];
         categoryFilters.forEach(filterId => {
             const filter = document.getElementById(filterId);
             if (filter) {
@@ -250,14 +298,26 @@ async function loadCategories() {
                 filter.innerHTML = '<option value="">Select...</option>';
                 
                 const categories = filterId.includes('Budget') ? 
-                    state.categories.filter(c => c.type === 'expense') : 
-                    state.categories;
+                    parentCategories.filter(c => c.type === 'expense') : 
+                    parentCategories;
                 
                 categories.forEach(cat => {
+                    // Add parent category
                     const option = document.createElement('option');
                     option.value = cat.id;
                     option.textContent = cat.name;
                     filter.appendChild(option);
+                    
+                    // Add subcategories with indentation
+                    if (cat.subcategories && cat.subcategories.length > 0) {
+                        cat.subcategories.forEach(sub => {
+                            const subOption = document.createElement('option');
+                            subOption.value = sub.id;
+                            subOption.textContent = `  └ ${sub.name}`;
+                            subOption.style.paddingLeft = '20px';
+                            filter.appendChild(subOption);
+                        });
+                    }
                 });
                 
                 filter.value = currentValue;
@@ -265,6 +325,411 @@ async function loadCategories() {
         });
     } catch (error) {
         console.error('Error loading categories:', error);
+    }
+}
+
+// Load Category Management (for Categories page)
+async function loadCategoryManagement() {
+    try {
+        const response = await fetch(`${API_URL}/categories/?include_subcategories=true`);
+        if (!response.ok) throw new Error('Failed to load categories');
+        
+        const categories = await response.json();
+        
+        // Filter to parent categories only (no parent_id)
+        const expenseCategories = categories.filter(c => c.type === 'expense' && !c.parent_id);
+        const incomeCategories = categories.filter(c => c.type === 'income' && !c.parent_id);
+        
+        // Helper function to render category with subcategories
+        const renderCategory = (cat) => {
+            const subcategories = cat.subcategories || [];
+            return `
+                <li class="category-item ${cat.is_default ? 'is-default' : ''}" data-id="${cat.id}">
+                    <div class="category-main">
+                        <div class="category-info">
+                            <span class="category-color" style="background: ${cat.color || '#3498db'}"></span>
+                            <span class="category-name">${cat.name}</span>
+                            ${cat.is_default ? '<span class="default-badge">Default</span>' : ''}
+                        </div>
+                        <div class="category-actions">
+                            <button class="btn-icon" title="Add Subcategory" onclick="openSubcategoryModal(${cat.id}, '${cat.name.replace(/'/g, "\\'")}', '${cat.type}')">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            ${!cat.is_default ? `
+                                <button class="btn-icon" title="Set as Default" onclick="setCategoryDefault(${cat.id})">
+                                    <i class="fas fa-star"></i>
+                                </button>
+                            ` : ''}
+                            <button class="btn-icon edit" title="Edit" onclick="editCategory(${cat.id})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            ${!cat.is_default ? `
+                                <button class="btn-icon delete" title="Delete" onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                    ${subcategories.length > 0 ? `
+                        <ul class="subcategory-list">
+                            ${subcategories.map(sub => `
+                                <li class="subcategory-item" data-id="${sub.id}">
+                                    <div class="category-info">
+                                        <span class="category-color" style="background: ${sub.color || cat.color || '#3498db'}"></span>
+                                        <span class="category-name">${sub.name}</span>
+                                    </div>
+                                    <div class="category-actions">
+                                        <button class="btn-icon edit" title="Edit" onclick="editCategory(${sub.id})">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn-icon delete" title="Delete" onclick="deleteCategory(${sub.id}, '${sub.name.replace(/'/g, "\\'")}')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    ` : ''}
+                </li>
+            `;
+        };
+        
+        // Render expense categories
+        const expenseList = document.getElementById('expenseCategoryList');
+        if (expenseList) {
+            expenseList.innerHTML = expenseCategories.map(renderCategory).join('');
+        }
+        
+        // Render income categories
+        const incomeList = document.getElementById('incomeCategoryList');
+        if (incomeList) {
+            incomeList.innerHTML = incomeCategories.map(renderCategory).join('');
+        }
+    } catch (error) {
+        console.error('Error loading category management:', error);
+    }
+}
+
+// Open Subcategory Modal
+function openSubcategoryModal(parentId, parentName, parentType) {
+    document.getElementById('categoryForm').reset();
+    document.getElementById('categoryId').value = '';
+    document.getElementById('categoryParentId').value = parentId;
+    
+    document.getElementById('categoryModalTitle').textContent = `Add Subcategory to ${parentName}`;
+    document.getElementById('categorySubmitBtn').textContent = 'Create Subcategory';
+    document.getElementById('categoryTypeGroup').style.display = 'none';
+    document.getElementById('categoryType').value = parentType;
+    
+    openModal('categoryModal');
+}
+
+// Open Category Modal (for create or edit)
+function openCategoryModal(category = null) {
+    document.getElementById('categoryForm').reset();
+    document.getElementById('categoryId').value = '';
+    document.getElementById('categoryParentId').value = '';
+    document.getElementById('subcategoriesSection').style.display = 'none';
+    document.getElementById('subcategoriesList').innerHTML = '';
+    document.getElementById('newSubcategoryName').value = '';
+    
+    if (category) {
+        // Edit mode
+        const isSubcategory = category.parent_id !== null && category.parent_id !== undefined;
+        document.getElementById('categoryModalTitle').textContent = isSubcategory ? 'Edit Subcategory' : 'Edit Category';
+        document.getElementById('categorySubmitBtn').textContent = 'Save Changes';
+        document.getElementById('categoryId').value = category.id;
+        document.getElementById('categoryName').value = category.name;
+        document.getElementById('categoryType').value = category.type;
+        document.getElementById('categoryColor').value = category.color || '#3498db';
+        // Disable type change for existing categories
+        document.getElementById('categoryTypeGroup').style.display = 'none';
+        
+        // Show subcategories section only for parent categories (not subcategories)
+        if (!isSubcategory) {
+            document.getElementById('subcategoriesSection').style.display = 'block';
+            renderSubcategoriesInModal(category.subcategories || []);
+        }
+    } else {
+        // Create mode
+        document.getElementById('categoryModalTitle').textContent = 'Add New Category';
+        document.getElementById('categorySubmitBtn').textContent = 'Create Category';
+        document.getElementById('categoryTypeGroup').style.display = 'block';
+    }
+    
+    openModal('categoryModal');
+}
+
+// Render subcategories in the edit modal
+function renderSubcategoriesInModal(subcategories) {
+    const list = document.getElementById('subcategoriesList');
+    if (subcategories.length === 0) {
+        list.innerHTML = '<p class="no-subcategories">No subcategories yet</p>';
+        return;
+    }
+    
+    list.innerHTML = subcategories.map(sub => `
+        <div class="subcategory-edit-item" data-id="${sub.id}">
+            <span class="subcategory-edit-name">${sub.name}</span>
+            <button type="button" class="btn-icon delete" title="Delete subcategory" onclick="deleteSubcategoryFromModal(${sub.id}, '${sub.name.replace(/'/g, "\\'")}')">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+// Add subcategory inline from the edit modal
+async function addSubcategoryInline() {
+    const name = document.getElementById('newSubcategoryName').value.trim();
+    const parentId = document.getElementById('categoryId').value;
+    
+    if (!name) {
+        alert('Please enter a subcategory name');
+        return;
+    }
+    
+    if (!parentId) {
+        alert('Please save the category first before adding subcategories');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/categories/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, parent_id: parseInt(parentId) })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to create subcategory');
+        }
+        
+        // Clear the input
+        document.getElementById('newSubcategoryName').value = '';
+        
+        // Reload the category to get updated subcategories
+        const catResponse = await fetch(`${API_URL}/categories/?include_subcategories=true`);
+        const categories = await catResponse.json();
+        const updatedCategory = categories.find(c => c.id === parseInt(parentId));
+        
+        if (updatedCategory) {
+            renderSubcategoriesInModal(updatedCategory.subcategories || []);
+        }
+        
+        // Also refresh the main categories list
+        await loadCategories();
+        if (state.currentPage === 'categories') {
+            loadCategoryManagement();
+        }
+    } catch (error) {
+        console.error('Error adding subcategory:', error);
+        alert(error.message);
+    }
+}
+
+// Delete subcategory from the edit modal
+async function deleteSubcategoryFromModal(id, name) {
+    if (!confirm(`Delete subcategory "${name}"?\n\nTransactions using this subcategory will be moved to the parent category.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/categories/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to delete subcategory');
+        }
+        
+        // Remove from the list
+        const item = document.querySelector(`.subcategory-edit-item[data-id="${id}"]`);
+        if (item) item.remove();
+        
+        // Check if list is now empty
+        const list = document.getElementById('subcategoriesList');
+        if (list.children.length === 0) {
+            list.innerHTML = '<p class="no-subcategories">No subcategories yet</p>';
+        }
+        
+        // Refresh categories
+        await loadCategories();
+        if (state.currentPage === 'categories') {
+            loadCategoryManagement();
+        }
+    } catch (error) {
+        console.error('Error deleting subcategory:', error);
+        alert(error.message);
+    }
+}
+
+// Edit Category
+async function editCategory(id) {
+    try {
+        const response = await fetch(`${API_URL}/categories/?include_subcategories=true`);
+        if (!response.ok) throw new Error('Failed to load categories');
+        
+        const categories = await response.json();
+        const category = categories.find(c => c.id === id);
+        
+        if (category) {
+            openCategoryModal(category);
+        }
+    } catch (error) {
+        console.error('Error loading category:', error);
+        alert('Error loading category');
+    }
+}
+
+// Set Category as Default
+async function setCategoryDefault(id) {
+    try {
+        const response = await fetch(`${API_URL}/categories/${id}/set-default`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to set default category');
+        }
+        
+        const result = await response.json();
+        
+        // Reload categories everywhere
+        await loadCategories();
+        loadCategoryManagement();
+    } catch (error) {
+        console.error('Error setting default category:', error);
+        alert(error.message);
+    }
+}
+
+// Delete Category (handles both categories and subcategories)
+async function deleteCategory(id, name, isSubcategory = false) {
+    // Check if this is a subcategory by looking it up
+    const category = state.categories.find(c => c.id === id);
+    const isSub = isSubcategory || (category && category.parent_id);
+    
+    let confirmMessage;
+    if (isSub) {
+        confirmMessage = `Are you sure you want to delete the subcategory "${name}"?\n\nAll transactions using this subcategory will be moved to the parent category.`;
+    } else {
+        confirmMessage = `Are you sure you want to delete the category "${name}"?\n\nAll subcategories will also be deleted.\nAll transactions, budgets, and rules will be reassigned to the system default category.`;
+    }
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/categories/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to delete category');
+        }
+        
+        const result = await response.json();
+        
+        let message = `${isSub ? 'Subcategory' : 'Category'} "${name}" deleted successfully.`;
+        if (result.reassigned) {
+            const { transactions, budgets, rules } = result.reassigned;
+            const targetCategory = result.reassigned_to || 'Other';
+            if (transactions > 0 || budgets > 0 || rules > 0) {
+                message += `\n\nReassigned to "${targetCategory}":`;
+                if (transactions > 0) message += `\n• ${transactions} transaction(s)`;
+                if (budgets > 0) message += `\n• ${budgets} budget(s)`;
+                if (rules > 0) message += `\n• ${rules} rule(s)`;
+            }
+        }
+        
+        alert(message);
+        
+        // Reload categories everywhere
+        await loadCategories();
+        loadCategoryManagement();
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        alert(error.message);
+    }
+}
+
+// Handle Category Submit (Create or Edit)
+async function handleCategorySubmit(e) {
+    e.preventDefault();
+    
+    const categoryId = document.getElementById('categoryId').value;
+    const parentId = document.getElementById('categoryParentId').value;
+    const name = document.getElementById('categoryName').value.trim();
+    const type = document.getElementById('categoryType').value;
+    const color = document.getElementById('categoryColor').value;
+    
+    // For new parent categories, type is required (subcategories inherit from parent)
+    if (!name || (!categoryId && !type && !parentId)) {
+        alert('Please fill all required fields');
+        return;
+    }
+    
+    try {
+        let url, method, body;
+        
+        if (categoryId) {
+            // Edit mode
+            url = `${API_URL}/categories/${categoryId}`;
+            method = 'PUT';
+            body = { name, color };
+        } else {
+            // Create mode
+            url = `${API_URL}/categories/`;
+            method = 'POST';
+            body = { name, color };
+            if (parentId) {
+                body.parent_id = parseInt(parentId);
+            } else {
+                body.type = type;
+            }
+        }
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save category');
+        }
+        
+        const savedCategory = await response.json();
+        
+        // Close the category modal
+        closeModal('categoryModal');
+        document.getElementById('categoryForm').reset();
+        
+        // Reload categories everywhere
+        await loadCategories();
+        
+        // Reload category management if on that page
+        if (state.currentPage === 'categories') {
+            loadCategoryManagement();
+        }
+        
+        // If we're creating from transaction form, select the new category
+        if (!categoryId && document.getElementById('transCategory')) {
+            document.getElementById('transCategory').value = savedCategory.id;
+        }
+        
+        alert(`Category "${name}" ${categoryId ? 'updated' : 'created'} successfully!`);
+    } catch (error) {
+        console.error('Error saving category:', error);
+        alert(error.message);
     }
 }
 
@@ -293,6 +758,7 @@ async function loadDashboard() {
         document.getElementById('totalIncome').textContent = formatCurrency(summary.total_income);
         document.getElementById('totalExpense').textContent = formatCurrency(summary.total_expense);
         document.getElementById('netBalance').textContent = formatCurrency(summary.net);
+        document.getElementById('totalExcluded').textContent = formatCurrency(summary.total_excluded);
 
         // Load category breakdowns
         const [expenseResponse, incomeResponse] = await Promise.all([
@@ -332,7 +798,7 @@ async function loadDashboard() {
 
 // Update Category Charts
 function updateCategoryCharts(expenseData, incomeData) {
-    const chartColors = ['#3498db', '#e74c3c', '#27ae60', '#f39c12', '#9b59b6', '#1abc9c', '#34495e', '#e67e22'];
+    const defaultColors = ['#3498db', '#e74c3c', '#27ae60', '#f39c12', '#9b59b6', '#1abc9c', '#34495e', '#e67e22'];
 
     // Destroy existing charts
     if (state.charts.expense) state.charts.expense.destroy();
@@ -341,13 +807,16 @@ function updateCategoryCharts(expenseData, incomeData) {
     // Expense Chart
     const expenseCtx = document.getElementById('expenseChart');
     if (expenseCtx && expenseData.categories.length > 0) {
+        // Use category colors if available, fallback to defaults
+        const expenseColors = expenseData.categories.map((c, i) => c.color || defaultColors[i % defaultColors.length]);
+        
         state.charts.expense = new Chart(expenseCtx, {
             type: 'doughnut',
             data: {
                 labels: expenseData.categories.map(c => c.category),
                 datasets: [{
                     data: expenseData.categories.map(c => c.amount),
-                    backgroundColor: chartColors,
+                    backgroundColor: expenseColors,
                     borderColor: '#fff',
                     borderWidth: 2
                 }]
@@ -367,13 +836,16 @@ function updateCategoryCharts(expenseData, incomeData) {
     // Income Chart
     const incomeCtx = document.getElementById('incomeChart');
     if (incomeCtx && incomeData.categories.length > 0) {
+        // Use category colors if available, fallback to defaults
+        const incomeColors = incomeData.categories.map((c, i) => c.color || defaultColors[i % defaultColors.length]);
+        
         state.charts.income = new Chart(incomeCtx, {
             type: 'doughnut',
             data: {
                 labels: incomeData.categories.map(c => c.category),
                 datasets: [{
                     data: incomeData.categories.map(c => c.amount),
-                    backgroundColor: chartColors,
+                    backgroundColor: incomeColors,
                     borderColor: '#fff',
                     borderWidth: 2
                 }]
@@ -470,12 +942,7 @@ function displayTransactions(transactions) {
             <td>${t.category_name}</td>
             <td><span class="tag ${t.type}">${t.type}</span></td>
             <td class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</td>
-            <td>
-                <select class="status-select" onchange="updateTransactionStatus(${t.id}, this.value)">
-                    <option value="false" ${!t.is_excluded ? 'selected' : ''}>Included</option>
-                    <option value="true" ${t.is_excluded ? 'selected' : ''}>Excluded</option>
-                </select>
-            </td>
+            <td><span class="tag ${t.is_excluded ? 'excluded' : 'included'}">${t.is_excluded ? 'Excluded' : 'Included'}</span></td>
             <td>
                 <div class="actions">
                     <button class="btn-icon edit" title="Edit" onclick="editTransaction(${t.id})">
@@ -609,6 +1076,7 @@ async function handleTransactionSubmit(e) {
     const categoryId = parseInt(document.getElementById('transCategory').value);
     const amount = parseFloat(document.getElementById('transAmount').value);
     const notes = document.getElementById('transNotes').value;
+    const isExcluded = state.currentTransaction ? document.getElementById('transStatus').value === 'true' : false;
 
     if (!date || !description || !type || !categoryId || !amount) {
         alert('Please fill all required fields');
@@ -633,7 +1101,8 @@ async function handleTransactionSubmit(e) {
                 type,
                 category_id: categoryId,
                 amount,
-                notes
+                notes,
+                is_excluded: isExcluded
             })
         });
 
@@ -677,6 +1146,8 @@ async function editTransaction(id) {
     document.getElementById('transCategory').value = trans.category_id;
     document.getElementById('transAmount').value = trans.amount;
     document.getElementById('transNotes').value = trans.notes || '';
+    document.getElementById('transStatus').value = trans.is_excluded ? 'true' : 'false';
+    document.getElementById('statusGroup').style.display = 'block';
 
     openModal('transactionModal');
 }
@@ -1434,6 +1905,223 @@ async function handleRuleSubmit(e) {
         console.error('Error saving rule:', error);
         alert(error.message);
     }
+}
+
+// Apply Rules to All Transactions
+async function applyRulesToAllTransactions() {
+    if (!confirm('This will apply all active categorization rules to existing transactions. Transactions matching rules will have their categories updated. Continue?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/rules/apply`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to apply rules');
+        }
+        
+        const result = await response.json();
+        
+        if (result.updated > 0) {
+            let message = `Successfully updated ${result.updated} transaction(s).\n\nDetails:\n`;
+            result.details.slice(0, 10).forEach(t => {
+                message += `• "${t.description.substring(0, 30)}..." → ${t.new_category} (via ${t.rule_name})\n`;
+            });
+            if (result.details.length > 10) {
+                message += `\n... and ${result.details.length - 10} more`;
+            }
+            alert(message);
+        } else {
+            alert('No transactions were updated. Either no rules matched or categories are already correct.');
+        }
+        
+        // Refresh transactions if on that page
+        if (state.currentPage === 'transactions') {
+            loadTransactions();
+        }
+    } catch (error) {
+        console.error('Error applying rules:', error);
+        alert(error.message);
+    }
+}
+
+// Export Rules
+async function exportRules() {
+    try {
+        const response = await fetch(`${API_URL}/rules/export`);
+        if (!response.ok) throw new Error('Failed to export rules');
+        
+        const data = await response.json();
+        
+        if (data.count === 0) {
+            alert('No rules to export');
+            return;
+        }
+        
+        // Ask user for format
+        const format = prompt('Export format: Enter "json" or "csv"', 'json');
+        if (!format) return;
+        
+        let content, filename, mimeType;
+        
+        if (format.toLowerCase() === 'csv') {
+            // Convert to CSV
+            const headers = ['name', 'keywords', 'category_name', 'category_type', 'priority', 'is_active'];
+            const csvRows = [headers.join(',')];
+            
+            data.rules.forEach(rule => {
+                const row = headers.map(header => {
+                    let value = rule[header];
+                    if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+                        value = `"${value.replace(/"/g, '""')}"`;
+                    }
+                    return value ?? '';
+                });
+                csvRows.push(row.join(','));
+            });
+            
+            content = csvRows.join('\n');
+            filename = 'categorization_rules.csv';
+            mimeType = 'text/csv';
+        } else {
+            // JSON format
+            content = JSON.stringify(data, null, 2);
+            filename = 'categorization_rules.json';
+            mimeType = 'application/json';
+        }
+        
+        // Download file
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert(`Exported ${data.count} rules to ${filename}`);
+    } catch (error) {
+        console.error('Error exporting rules:', error);
+        alert('Error exporting rules: ' + error.message);
+    }
+}
+
+// Handle Rules Import
+async function handleRulesImport(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+        const text = await file.text();
+        let rules;
+        
+        if (file.name.endsWith('.csv')) {
+            // Parse CSV
+            const lines = text.split('\n').filter(line => line.trim());
+            if (lines.length < 2) {
+                throw new Error('CSV file is empty or has no data rows');
+            }
+            
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            rules = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                const rule = {};
+                headers.forEach((header, index) => {
+                    let value = values[index] || '';
+                    if (header === 'priority') {
+                        value = parseInt(value) || 0;
+                    } else if (header === 'is_active') {
+                        value = value.toLowerCase() !== 'false';
+                    }
+                    rule[header] = value;
+                });
+                rules.push(rule);
+            }
+        } else {
+            // Parse JSON
+            const data = JSON.parse(text);
+            rules = data.rules || data;
+        }
+        
+        if (!Array.isArray(rules) || rules.length === 0) {
+            throw new Error('No valid rules found in file');
+        }
+        
+        // Confirm import
+        if (!confirm(`Found ${rules.length} rules in file. Import them?`)) {
+            e.target.value = '';
+            return;
+        }
+        
+        const response = await fetch(`${API_URL}/rules/import`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ rules })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to import rules');
+        }
+        
+        const result = await response.json();
+        
+        let message = `Import complete!\n\nImported: ${result.imported}\nSkipped (duplicates): ${result.skipped}\nTotal in file: ${result.total}`;
+        if (result.errors && result.errors.length > 0) {
+            message += `\n\nErrors:\n${result.errors.slice(0, 5).join('\n')}`;
+            if (result.errors.length > 5) {
+                message += `\n... and ${result.errors.length - 5} more errors`;
+            }
+        }
+        
+        alert(message);
+        loadRules();
+    } catch (error) {
+        console.error('Error importing rules:', error);
+        alert('Error importing rules: ' + error.message);
+    }
+    
+    e.target.value = '';
+}
+
+// Parse CSV line handling quoted values
+function parseCSVLine(line) {
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+                current += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            values.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    
+    values.push(current.trim());
+    return values;
 }
 
 // Test Rule

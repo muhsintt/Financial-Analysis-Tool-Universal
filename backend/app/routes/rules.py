@@ -2,8 +2,51 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models.categorization_rule import CategorizationRule
 from app.models.category import Category
+from app.models.transaction import Transaction
 
 rules_bp = Blueprint('rules', __name__, url_prefix='/api/rules')
+
+@rules_bp.route('/apply', methods=['POST'])
+def apply_rules():
+    """Apply all active rules to existing transactions"""
+    # Get all active rules ordered by priority
+    rules = CategorizationRule.query.filter_by(is_active=True).order_by(
+        CategorizationRule.priority.desc()
+    ).all()
+    
+    if not rules:
+        return jsonify({'message': 'No active rules found', 'updated': 0}), 200
+    
+    # Get all transactions
+    transactions = Transaction.query.all()
+    
+    updated_count = 0
+    updated_transactions = []
+    
+    for transaction in transactions:
+        for rule in rules:
+            if rule.matches(transaction.description):
+                # Only update if category is different
+                if transaction.category_id != rule.category_id:
+                    old_category = transaction.category.name if transaction.category else 'Unknown'
+                    transaction.category_id = rule.category_id
+                    updated_count += 1
+                    updated_transactions.append({
+                        'id': transaction.id,
+                        'description': transaction.description,
+                        'old_category': old_category,
+                        'new_category': rule.category.name,
+                        'rule_name': rule.name
+                    })
+                break  # Stop after first matching rule (highest priority)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'Applied rules to {updated_count} transactions',
+        'updated': updated_count,
+        'details': updated_transactions
+    }), 200
 
 @rules_bp.route('/', methods=['GET'])
 def get_rules():
@@ -178,6 +221,100 @@ def bulk_import_rules():
     
     return jsonify({
         'imported': imported_count,
+        'total': len(data['rules']),
+        'errors': errors if errors else None
+    }), 201
+
+@rules_bp.route('/export', methods=['GET'])
+def export_rules():
+    """Export all rules as JSON with category names for portability"""
+    rules = CategorizationRule.query.order_by(
+        CategorizationRule.priority.desc()
+    ).all()
+    
+    export_data = []
+    for rule in rules:
+        export_data.append({
+            'name': rule.name,
+            'keywords': rule.keywords,
+            'category_name': rule.category.name if rule.category else None,
+            'category_type': rule.category.type if rule.category else None,
+            'priority': rule.priority,
+            'is_active': rule.is_active
+        })
+    
+    return jsonify({
+        'rules': export_data,
+        'count': len(export_data)
+    })
+
+@rules_bp.route('/import', methods=['POST'])
+def import_rules():
+    """Import rules from JSON, matching categories by name"""
+    data = request.get_json()
+    
+    if not isinstance(data.get('rules'), list):
+        return jsonify({'error': 'Rules must be a list'}), 400
+    
+    imported_count = 0
+    skipped_count = 0
+    errors = []
+    
+    for i, rule_data in enumerate(data['rules']):
+        try:
+            # Check required fields
+            if not rule_data.get('name') or not rule_data.get('keywords'):
+                errors.append(f"Rule {i+1}: Missing name or keywords")
+                continue
+            
+            # Check for duplicate names
+            existing = CategorizationRule.query.filter_by(name=rule_data['name']).first()
+            if existing:
+                skipped_count += 1
+                continue
+            
+            # Find category by name or ID
+            category = None
+            if rule_data.get('category_id'):
+                category = Category.query.get(rule_data['category_id'])
+            elif rule_data.get('category_name'):
+                category = Category.query.filter_by(name=rule_data['category_name']).first()
+                # Create category if it doesn't exist
+                if not category and rule_data.get('category_type'):
+                    category = Category(
+                        name=rule_data['category_name'],
+                        type=rule_data['category_type']
+                    )
+                    db.session.add(category)
+                    db.session.flush()  # Get the ID
+            
+            if not category:
+                errors.append(f"Rule {i+1} '{rule_data['name']}': Category not found")
+                continue
+            
+            rule = CategorizationRule(
+                name=rule_data['name'],
+                keywords=rule_data['keywords'],
+                category_id=category.id,
+                priority=rule_data.get('priority', 0),
+                is_active=rule_data.get('is_active', True)
+            )
+            
+            db.session.add(rule)
+            imported_count += 1
+        
+        except Exception as e:
+            errors.append(f"Rule {i+1}: {str(e)}")
+    
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Database error: {str(e)}'}), 400
+    
+    return jsonify({
+        'imported': imported_count,
+        'skipped': skipped_count,
         'total': len(data['rules']),
         'errors': errors if errors else None
     }), 201

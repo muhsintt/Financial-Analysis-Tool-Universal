@@ -268,5 +268,3 @@ def bulk_delete_by_file():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
-

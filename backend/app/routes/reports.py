@@ -39,22 +39,27 @@ def get_summary():
     period = request.args.get('period', 'monthly')
     year = request.args.get('year', type=int)
     month = request.args.get('month', type=int)
-    include_excluded = request.args.get('include_excluded', 'false').lower() == 'true'
     
     start_date, end_date = get_date_range(period, year, month)
     
-    query = Transaction.query.filter(
+    # Get all transactions in the date range
+    all_transactions = Transaction.query.filter(
         Transaction.date >= start_date,
         Transaction.date <= end_date
-    )
+    ).all()
     
-    if not include_excluded:
-        query = query.filter_by(is_excluded=False)
+    # Calculate totals for all transactions (included + excluded)
+    total_income = sum(t.amount for t in all_transactions if t.type == 'income')
+    total_expense = sum(t.amount for t in all_transactions if t.type == 'expense')
     
-    transactions = query.all()
+    # Calculate totals for excluded transactions only
+    excluded_income = sum(t.amount for t in all_transactions if t.type == 'income' and t.is_excluded)
+    excluded_expense = sum(t.amount for t in all_transactions if t.type == 'expense' and t.is_excluded)
+    total_excluded = excluded_income + excluded_expense
     
-    total_income = sum(t.amount for t in transactions if t.type == 'income')
-    total_expense = sum(t.amount for t in transactions if t.type == 'expense')
+    # Calculate included totals for net balance
+    included_income = total_income - excluded_income
+    included_expense = total_expense - excluded_expense
     
     return jsonify({
         'period': period,
@@ -62,8 +67,13 @@ def get_summary():
         'end_date': end_date.isoformat(),
         'total_income': total_income,
         'total_expense': total_expense,
-        'net': total_income - total_expense,
-        'transaction_count': len(transactions)
+        'excluded_income': excluded_income,
+        'excluded_expense': excluded_expense,
+        'total_excluded': total_excluded,
+        'included_income': included_income,
+        'included_expense': included_expense,
+        'net': included_income - included_expense,
+        'transaction_count': len(all_transactions)
     })
 
 @reports_bp.route('/by-category', methods=['GET'])
@@ -88,15 +98,26 @@ def get_by_category():
     
     transactions = query.all()
     
-    # Group by category
+    # Group by category (using full_name which includes parent for subcategories)
     category_totals = {}
     for t in transactions:
-        cat_name = t.category.name if t.category else 'Unknown'
+        if t.category:
+            # Use full_name to show "Parent > Subcategory" format
+            cat_name = t.category.full_name if hasattr(t.category, 'full_name') else t.category.name
+            cat_color = t.category.color
+            parent_id = t.category.parent_id
+        else:
+            cat_name = 'Unknown'
+            cat_color = '#999999'
+            parent_id = None
+            
         if cat_name not in category_totals:
             category_totals[cat_name] = {
                 'amount': 0,
                 'count': 0,
-                'category_id': t.category_id if t.category else None
+                'category_id': t.category_id if t.category else None,
+                'color': cat_color,
+                'parent_id': parent_id
             }
         category_totals[cat_name]['amount'] += t.amount
         category_totals[cat_name]['count'] += 1
@@ -108,6 +129,8 @@ def get_by_category():
             'category_id': data['category_id'],
             'amount': data['amount'],
             'count': data['count'],
+            'color': data['color'],
+            'parent_id': data['parent_id'],
             'percentage': 0  # Will be calculated on frontend
         })
     
@@ -152,9 +175,21 @@ def get_budget_analysis():
         
         actual = sum(t.amount for t in query.all())
         
+        # Use full_name to show parent for subcategories
+        if budget.category:
+            cat_name = budget.category.full_name if hasattr(budget.category, 'full_name') else budget.category.name
+            cat_color = budget.category.color
+            parent_id = budget.category.parent_id
+        else:
+            cat_name = 'Unknown'
+            cat_color = '#999999'
+            parent_id = None
+        
         results.append({
-            'category': budget.category.name if budget.category else 'Unknown',
+            'category': cat_name,
             'category_id': budget.category_id,
+            'color': cat_color,
+            'parent_id': parent_id,
             'budgeted': budget.amount,
             'actual': actual,
             'difference': budget.amount - actual,

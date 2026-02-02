@@ -29,12 +29,21 @@ class CategorizationRule(db.Model):
         return any(keyword in desc_lower for keyword in self.get_keywords_list())
     
     def to_dict(self):
+        # Get full category name (with parent if subcategory)
+        if self.category:
+            category_name = self.category.full_name if hasattr(self.category, 'full_name') else self.category.name
+            parent_id = self.category.parent_id
+        else:
+            category_name = None
+            parent_id = None
+            
         return {
             'id': self.id,
             'name': self.name,
             'keywords': self.keywords,
             'category_id': self.category_id,
-            'category_name': self.category.name if self.category else None,
+            'category_name': category_name,
+            'parent_id': parent_id,
             'priority': self.priority,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat(),

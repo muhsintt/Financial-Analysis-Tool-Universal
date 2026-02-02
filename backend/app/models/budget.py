@@ -19,10 +19,22 @@ class Budget(db.Model):
         return f'<Budget {self.category.name if self.category else "Unknown"} - {self.amount}>'
     
     def to_dict(self):
+        # Get full category name (with parent if subcategory)
+        if self.category:
+            category_name = self.category.full_name if hasattr(self.category, 'full_name') else self.category.name
+            category_color = self.category.color
+            parent_id = self.category.parent_id
+        else:
+            category_name = None
+            category_color = None
+            parent_id = None
+            
         return {
             'id': self.id,
             'category_id': self.category_id,
-            'category_name': self.category.name if self.category else None,
+            'category_name': category_name,
+            'category_color': category_color,
+            'parent_id': parent_id,
             'amount': self.amount,
             'period': self.period,
             'year': self.year,
