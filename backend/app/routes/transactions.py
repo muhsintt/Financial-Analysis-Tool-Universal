@@ -136,3 +136,45 @@ def change_category(category_id):
     db.session.commit()
     
     return jsonify({'message': f'{count} transactions updated'})
+
+@transactions_bp.route('/bulk-update/', methods=['PUT'])
+def bulk_update():
+    """Bulk update transactions (category or other fields)"""
+    data = request.get_json()
+    transaction_ids = data.get('transaction_ids', [])
+    
+    if not transaction_ids:
+        return jsonify({'error': 'Missing transaction_ids'}), 400
+    
+    # Filter valid transaction IDs
+    transactions = Transaction.query.filter(Transaction.id.in_(transaction_ids)).all()
+    
+    if not transactions:
+        return jsonify({'error': 'No transactions found'}), 404
+    
+    # Update category if provided
+    if 'category_id' in data:
+        category_id = data.get('category_id')
+        category = Category.query.get(category_id)
+        if not category:
+            return jsonify({'error': 'Category not found'}), 404
+        
+        for trans in transactions:
+            trans.category_id = category_id
+    
+    # Update other fields as provided
+    if 'type' in data:
+        for trans in transactions:
+            trans.type = data['type']
+    
+    if 'is_excluded' in data:
+        for trans in transactions:
+            trans.is_excluded = data['is_excluded']
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'{len(transactions)} transaction(s) updated',
+        'count': len(transactions)
+    })
+

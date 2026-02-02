@@ -445,6 +445,21 @@ async function handleTransactionSubmit(e) {
 
         if (!response.ok) throw new Error('Failed to save transaction');
 
+        // Check if category changed on edit and prompt to apply to similar transactions
+        if (state.currentTransaction && state.currentTransaction.category_id !== categoryId) {
+            const similarTransactions = findSimilarTransactions(description, state.currentTransaction.id, categoryId);
+            if (similarTransactions.length > 0) {
+                const applyToAll = confirm(
+                    `Found ${similarTransactions.length} similar transaction(s) with the same merchant.\n\n` +
+                    `Would you like to apply this category to all of them?`
+                );
+                
+                if (applyToAll) {
+                    await applyBulkCategoryUpdate(similarTransactions.map(t => t.id), categoryId);
+                }
+            }
+        }
+
         alert(state.currentTransaction ? 'Transaction updated!' : 'Transaction added!');
         document.getElementById('transactionModal').classList.remove('show');
         document.getElementById('transactionForm').reset();
@@ -511,6 +526,66 @@ async function updateTransactionStatus(id, status) {
     } catch (error) {
         console.error('Error updating status:', error);
         alert('Error updating transaction status');
+    }
+}
+
+// Find similar transactions by merchant/description
+function findSimilarTransactions(description, excludeId, categoryId) {
+    const normalizedDesc = description.toLowerCase().trim();
+    const merchantName = extractMerchantName(normalizedDesc);
+    
+    return state.transactions.filter(t => {
+        // Exclude the current transaction being edited
+        if (t.id === excludeId) return false;
+        
+        // Only include transactions that don't already have this category
+        if (t.category_id === categoryId) return false;
+        
+        // Match by merchant name
+        const tMerchant = extractMerchantName(t.description.toLowerCase().trim());
+        return tMerchant === merchantName && tMerchant.length > 0;
+    });
+}
+
+// Extract merchant name from description (first word or meaningful part)
+function extractMerchantName(description) {
+    // Remove common prefixes like "DEBIT", "TRANSFER", "PAYMENT"
+    const cleanDesc = description
+        .replace(/^(debit|transfer|payment|check|ach|wire|atm|pos|purchase|transaction|ref:|memo:)\s*/gi, '')
+        .trim();
+    
+    // Get first word or first meaningful part
+    const words = cleanDesc.split(/[\s\-\/]/);
+    const firstWord = words[0];
+    
+    // Return first word if it's substantial (not a number/date)
+    if (firstWord && firstWord.length > 2 && !/^\d+$/.test(firstWord)) {
+        return firstWord;
+    }
+    return '';
+}
+
+// Apply category to multiple transactions
+async function applyBulkCategoryUpdate(transactionIds, categoryId) {
+    try {
+        const response = await fetch(`${API_URL}/transactions/bulk-update/`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                transaction_ids: transactionIds,
+                category_id: categoryId
+            })
+        });
+
+        if (!response.ok) throw new Error('Failed to apply category to similar transactions');
+
+        loadTransactions();
+        alert(`Applied category to ${transactionIds.length} transaction(s)`);
+    } catch (error) {
+        console.error('Error applying bulk category update:', error);
+        // Don't alert here since main transaction was already saved
     }
 }
 
