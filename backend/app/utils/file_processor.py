@@ -188,10 +188,15 @@ def process_excel_file(filepath, limit=None):
 
 def process_delete_file(file):
     """
-    Process a file containing transaction IDs to delete.
-    Supports CSV and Excel formats with one ID per row.
-    Can be in a column labeled 'id', 'transaction_id', 'ID', or just the first column.
+    Process a file containing transactions to delete.
+    Supports two formats:
+    1. ID-based: CSV/Excel with 'id', 'transaction_id', 'ID', or 'Transaction ID' column
+    2. Bank statement format: Matches by description/payee and amount (e.g., 2025_JAN_FIN.xlsx)
+    
+    For bank statement format, looks for columns: Payee/Description, Amount/Transaction Amount
     """
+    from app.models.transaction import Transaction
+    
     try:
         transaction_ids = []
         filename = file.filename.lower()
@@ -205,25 +210,93 @@ def process_delete_file(file):
         else:
             raise ValueError("File must be CSV or Excel format")
         
-        # Find the ID column (try common names first)
+        # Try ID-based deletion first
         id_column = None
         for col_name in ['id', 'transaction_id', 'ID', 'Transaction ID']:
             if col_name in df.columns:
                 id_column = col_name
                 break
         
-        # If no standard column found, use the first column
-        if id_column is None:
-            id_column = df.columns[0]
+        # If ID column found, use that
+        if id_column is not None:
+            for idx, val in df[id_column].items():
+                try:
+                    if pd.notna(val):
+                        transaction_ids.append(int(val))
+                except (ValueError, TypeError):
+                    continue
+            
+            if transaction_ids:
+                return transaction_ids
         
-        # Extract IDs and convert to integers
-        for idx, val in df[id_column].items():
-            try:
-                if pd.notna(val):
-                    transaction_ids.append(int(val))
-            except (ValueError, TypeError):
-                # Skip non-numeric values
-                continue
+        # Otherwise, try bank statement format matching
+        payee_column = None
+        amount_column = None
+        
+        # Find payee/description column
+        for col_name in ['Payee', 'Description', 'payee', 'description', 'PAYEE', 'DESCRIPTION', 'Merchant', 'merchant']:
+            if col_name in df.columns:
+                payee_column = col_name
+                break
+        
+        # Find amount column
+        for col_name in ['Amount', 'amount', 'Transaction Amount', 'transaction amount', 'AMOUNT', 'Value', 'value']:
+            if col_name in df.columns:
+                amount_column = col_name
+                break
+        
+        # If we have both payee and amount columns, try to match transactions
+        if payee_column and amount_column:
+            for idx, row in df.iterrows():
+                try:
+                    payee = str(row[payee_column]).strip()
+                    amount_str = str(row[amount_column]).strip()
+                    
+                    # Handle negative amounts (expenses)
+                    amount = float(amount_str.replace('$', '').replace(',', ''))
+                    amount = abs(amount)  # Always use absolute value for matching
+                    
+                    if pd.notna(payee) and payee and amount > 0:
+                        # Find matching transaction
+                        matching_trans = Transaction.query.filter(
+                            Transaction.description.ilike(f'%{payee}%'),
+                            Transaction.amount == amount
+                        ).first()
+                        
+                        if matching_trans:
+                            transaction_ids.append(matching_trans.id)
+                
+                except (ValueError, TypeError, AttributeError):
+                    continue
+            
+            if transaction_ids:
+                return transaction_ids
+        
+        # If we only have amount column, try matching by amount alone
+        if amount_column and not transaction_ids:
+            for idx, row in df.iterrows():
+                try:
+                    amount_str = str(row[amount_column]).strip()
+                    amount = float(amount_str.replace('$', '').replace(',', ''))
+                    amount = abs(amount)
+                    
+                    if amount > 0:
+                        matching_trans = Transaction.query.filter(
+                            Transaction.amount == amount
+                        ).first()
+                        
+                        if matching_trans:
+                            transaction_ids.append(matching_trans.id)
+                
+                except (ValueError, TypeError):
+                    continue
+            
+            if transaction_ids:
+                return transaction_ids
+        
+        if not transaction_ids:
+            raise ValueError("No valid transaction IDs or matching transactions found in file. "
+                           "File should contain 'ID' column or 'Payee' + 'Amount' columns for bank statement format.")
         
         return transaction_ids
     
