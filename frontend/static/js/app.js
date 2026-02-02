@@ -74,6 +74,13 @@ function initializeEventListeners() {
     // Search
     document.getElementById('searchInput').addEventListener('input', filterTransactions);
 
+    // Bulk delete by selection
+    document.getElementById('bulkDeleteFileBtn').addEventListener('click', () => {
+        document.getElementById('bulkDeleteFile').click();
+    });
+
+    document.getElementById('bulkDeleteFile').addEventListener('change', handleBulkDeleteFileUpload);
+
     // Upload
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
@@ -369,7 +376,10 @@ async function loadTransactions() {
 function displayTransactions(transactions) {
     const tbody = document.getElementById('transactionsBody');
     tbody.innerHTML = transactions.map(t => `
-        <tr>
+        <tr class="transaction-row" data-id="${t.id}">
+            <td class="checkbox-col">
+                <input type="checkbox" class="transaction-checkbox" value="${t.id}" onchange="updateBulkDeleteToolbar()">
+            </td>
             <td>${formatDate(t.date)}</td>
             <td>${t.description}</td>
             <td>${t.category_name}</td>
@@ -503,6 +513,107 @@ async function deleteTransaction(id) {
     } catch (error) {
         console.error('Error deleting transaction:', error);
         alert('Error deleting transaction');
+    }
+}
+
+// Toggle Select All checkbox
+function toggleSelectAll(checked) {
+    document.querySelectorAll('.transaction-checkbox').forEach(checkbox => {
+        checkbox.checked = checked;
+    });
+    updateBulkDeleteToolbar();
+}
+
+// Update bulk delete toolbar visibility and count
+function updateBulkDeleteToolbar() {
+    const checkedBoxes = document.querySelectorAll('.transaction-checkbox:checked');
+    const toolbar = document.getElementById('bulkDeleteToolbar');
+    const count = checkedBoxes.length;
+    
+    if (count > 0) {
+        toolbar.style.display = 'flex';
+        document.getElementById('selectionCount').textContent = `${count} selected`;
+        // Update select all checkbox state
+        const allBoxes = document.querySelectorAll('.transaction-checkbox');
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        selectAllCheckbox.checked = checkedBoxes.length === allBoxes.length;
+    } else {
+        toolbar.style.display = 'none';
+        document.getElementById('selectAllCheckbox').checked = false;
+    }
+}
+
+// Bulk delete selected transactions
+async function bulkDeleteSelected() {
+    const checkedBoxes = document.querySelectorAll('.transaction-checkbox:checked');
+    const ids = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+    
+    if (ids.length === 0) {
+        alert('Please select transactions to delete');
+        return;
+    }
+    
+    const confirmed = confirm(`Are you sure you want to delete ${ids.length} transaction(s)? This cannot be undone.`);
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/transactions/bulk-delete/`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                transaction_ids: ids
+            })
+        });
+
+        if (!response.ok) throw new Error('Failed to delete transactions');
+
+        alert(`Successfully deleted ${ids.length} transaction(s)`);
+        clearSelection();
+        loadTransactions();
+    } catch (error) {
+        console.error('Error deleting transactions:', error);
+        alert('Error deleting transactions');
+    }
+}
+
+// Clear selection
+function clearSelection() {
+    document.querySelectorAll('.transaction-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateBulkDeleteToolbar();
+}
+
+// Handle file upload for bulk delete
+async function handleBulkDeleteFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_URL}/transactions/bulk-delete-by-file/`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to delete transactions from file');
+        }
+
+        const result = await response.json();
+        alert(`Successfully deleted ${result.deleted_count} transaction(s) from file`);
+        loadTransactions();
+    } catch (error) {
+        console.error('Error deleting transactions from file:', error);
+        alert(`Error: ${error.message}`);
+    } finally {
+        // Reset file input
+        document.getElementById('bulkDeleteFile').value = '';
     }
 }
 

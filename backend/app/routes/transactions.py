@@ -178,3 +178,65 @@ def bulk_update():
         'count': len(transactions)
     })
 
+@transactions_bp.route('/bulk-delete/', methods=['DELETE'])
+def bulk_delete():
+    """Delete multiple transactions by IDs"""
+    data = request.get_json()
+    transaction_ids = data.get('transaction_ids', [])
+    
+    if not transaction_ids:
+        return jsonify({'error': 'Missing transaction_ids'}), 400
+    
+    transactions = Transaction.query.filter(Transaction.id.in_(transaction_ids)).all()
+    
+    if not transactions:
+        return jsonify({'error': 'No transactions found'}), 404
+    
+    deleted_count = len(transactions)
+    for trans in transactions:
+        db.session.delete(trans)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'{deleted_count} transaction(s) deleted',
+        'deleted_count': deleted_count
+    })
+
+@transactions_bp.route('/bulk-delete-by-file/', methods=['POST'])
+def bulk_delete_by_file():
+    """Delete transactions by uploading a file (CSV or Excel with Transaction IDs)"""
+    from app.utils.file_processor import process_delete_file
+    
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    if not file or file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    try:
+        # Process the file to get transaction IDs to delete
+        transaction_ids = process_delete_file(file)
+        
+        if not transaction_ids:
+            return jsonify({'error': 'No valid transaction IDs found in file'}), 400
+        
+        # Delete the transactions
+        transactions = Transaction.query.filter(Transaction.id.in_(transaction_ids)).all()
+        deleted_count = len(transactions)
+        
+        for trans in transactions:
+            db.session.delete(trans)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'{deleted_count} transaction(s) deleted',
+            'deleted_count': deleted_count
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+

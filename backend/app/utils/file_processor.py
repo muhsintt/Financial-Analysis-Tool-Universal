@@ -185,3 +185,48 @@ def process_excel_file(filepath, limit=None):
     
     except Exception as e:
         raise Exception(f"Error processing Excel: {str(e)}")
+
+def process_delete_file(file):
+    """
+    Process a file containing transaction IDs to delete.
+    Supports CSV and Excel formats with one ID per row.
+    Can be in a column labeled 'id', 'transaction_id', 'ID', or just the first column.
+    """
+    try:
+        transaction_ids = []
+        filename = file.filename.lower()
+        
+        if filename.endswith('.csv'):
+            # Process CSV
+            df = pd.read_csv(file)
+        elif filename.endswith(('.xlsx', '.xls')):
+            # Process Excel
+            df = pd.read_excel(file)
+        else:
+            raise ValueError("File must be CSV or Excel format")
+        
+        # Find the ID column (try common names first)
+        id_column = None
+        for col_name in ['id', 'transaction_id', 'ID', 'Transaction ID']:
+            if col_name in df.columns:
+                id_column = col_name
+                break
+        
+        # If no standard column found, use the first column
+        if id_column is None:
+            id_column = df.columns[0]
+        
+        # Extract IDs and convert to integers
+        for idx, val in df[id_column].items():
+            try:
+                if pd.notna(val):
+                    transaction_ids.append(int(val))
+            except (ValueError, TypeError):
+                # Skip non-numeric values
+                continue
+        
+        return transaction_ids
+    
+    except Exception as e:
+        raise Exception(f"Error processing delete file: {str(e)}")
+

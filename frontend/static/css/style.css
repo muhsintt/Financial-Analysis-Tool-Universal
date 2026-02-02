@@ -343,6 +343,44 @@ body {
     overflow-x: auto;
 }
 
+/* Bulk delete toolbar */
+.bulk-delete-toolbar {
+    display: none;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 20px;
+    background: #fff3cd;
+    border-bottom: 1px solid #e9ecef;
+    border-radius: 10px 10px 0 0;
+    font-weight: 600;
+    color: #856404;
+}
+
+.bulk-delete-toolbar .btn {
+    margin-left: auto;
+}
+
+.bulk-delete-toolbar .btn:first-of-type {
+    margin-left: auto;
+}
+
+/* Checkbox column styling */
+.checkbox-col {
+    width: 40px;
+    padding: 10px !important;
+    text-align: center;
+}
+
+.checkbox-col input[type="checkbox"] {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+}
+
+.transaction-row.selected {
+    background: #e3f2fd !important;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;

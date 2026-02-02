@@ -103,6 +103,9 @@
                             <button class="btn btn-primary" id="addTransBtn">
                                 <i class="fas fa-plus"></i> Add Transaction
                             </button>
+                            <button class="btn btn-warning" id="bulkDeleteFileBtn">
+                                <i class="fas fa-file-upload"></i> Delete by File
+                            </button>
                         </div>
                         <div class="filters">
                             <select id="typeFilter" class="form-control">
@@ -122,10 +125,23 @@
                         </div>
                     </div>
                     
+                    <!-- Hidden file input for bulk delete -->
+                    <input type="file" id="bulkDeleteFile" style="display: none;" accept=".csv,.xlsx,.xls">
+                    
                     <div class="transactions-table">
+                        <div id="bulkDeleteToolbar" class="bulk-delete-toolbar" style="display: none;">
+                            <span id="selectionCount">0 selected</span>
+                            <button class="btn btn-danger" onclick="bulkDeleteSelected()">
+                                <i class="fas fa-trash"></i> Delete Selected
+                            </button>
+                            <button class="btn btn-secondary" onclick="clearSelection()">Clear</button>
+                        </div>
                         <table>
                             <thead>
                                 <tr>
+                                    <th class="checkbox-col">
+                                        <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)">
+                                    </th>
                                     <th>Date</th>
                                     <th>Description</th>
                                     <th>Category</th>
