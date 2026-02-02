@@ -25,6 +25,7 @@
                     <li><a href="#reports" class="nav-link" data-page="reports"><i class="fas fa-chart-bar"></i> Reports</a></li>
                     <li><a href="#rules" class="nav-link" data-page="rules"><i class="fas fa-filter"></i> Categorization Rules</a></li>
                     <li><a href="#upload" class="nav-link" data-page="upload"><i class="fas fa-upload"></i> Upload</a></li>
+                    <li><a href="#settings" class="nav-link" data-page="settings"><i class="fas fa-cog"></i> Settings</a></li>
                 </ul>
             </nav>
         </aside>
@@ -265,6 +266,48 @@
                                 <!-- Populated by JavaScript -->
                             </tbody>
                         </table>
+                    </div>
+                </div>
+                
+                <!-- Settings Page -->
+                <div id="settings" class="page">
+                    <div class="settings-container">
+                        <div class="settings-section">
+                            <h2>API Status</h2>
+                            <div class="api-status-card">
+                                <div class="status-header">
+                                    <h3>API Server Control</h3>
+                                    <div id="statusBadge">
+                                        <span id="statusText">Loading...</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="status-details" id="statusDetails">
+                                    <div class="detail-row">
+                                        <label>Status:</label>
+                                        <span class="status-value">Loading...</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <label>Last Toggled:</label>
+                                        <span class="status-value">Never</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <label>Toggled By:</label>
+                                        <span class="status-value">System</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="toggle-section">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="apiToggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span class="toggle-label">Toggle API</span>
+                                </div>
+                                
+                                <div id="toggleMessage"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 

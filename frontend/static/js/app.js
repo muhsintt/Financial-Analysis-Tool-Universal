@@ -80,6 +80,12 @@ function initializeEventListeners() {
     document.getElementById('ruleForm').addEventListener('submit', handleRuleSubmit);
     document.getElementById('ruleTestInput').addEventListener('input', testRule);
 
+    // API Status Toggle
+    const apiToggle = document.getElementById('apiToggle');
+    if (apiToggle) {
+        apiToggle.addEventListener('change', handleApiToggle);
+    }
+
     // Filters
     document.getElementById('typeFilter').addEventListener('change', loadTransactions);
     document.getElementById('categoryFilter').addEventListener('change', loadTransactions);
@@ -161,7 +167,8 @@ function navigateTo(page) {
         'budgets': 'Budgets',
         'reports': 'Reports',
         'rules': 'Categorization Rules',
-        'upload': 'Upload Bank Statement'
+        'upload': 'Upload Bank Statement',
+        'settings': 'Settings'
     };
     document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
 
@@ -184,6 +191,9 @@ function navigateTo(page) {
             break;
         case 'reports':
             loadReports();
+            break;
+        case 'settings':
+            loadApiStatus();
             break;
     }
 }
@@ -1435,6 +1445,110 @@ async function testRule() {
                     Category: ${result.primary_match.category_name}<br>
                     Priority: ${result.primary_match.priority}
                 </div>
+
+// API Status Management
+async function loadApiStatus() {
+    try {
+        const response = await fetch(`${API_URL}/status/`);
+        if (!response.ok) throw new Error('Failed to load API status');
+        
+        const status = await response.json();
+        updateApiStatusDisplay(status);
+        
+        // Set up auto-refresh every 5 seconds
+        if (window.statusRefreshInterval) {
+            clearInterval(window.statusRefreshInterval);
+        }
+        window.statusRefreshInterval = setInterval(async () => {
+            const refreshResponse = await fetch(`${API_URL}/status/`);
+            if (refreshResponse.ok) {
+                const refreshStatus = await refreshResponse.json();
+                updateApiStatusDisplay(refreshStatus);
+            }
+        }, 5000);
+    } catch (error) {
+        console.error('Error loading API status:', error);
+        document.getElementById('statusBadge').textContent = 'Error loading status';
+    }
+}
+
+function updateApiStatusDisplay(status) {
+    const statusBadge = document.getElementById('statusBadge');
+    const apiToggle = document.getElementById('apiToggle');
+    const statusDetails = document.getElementById('statusDetails');
+    
+    const isOnline = status.status === 'Online';
+    
+    // Update badge
+    statusBadge.innerHTML = `<span class="status-badge ${isOnline ? 'online' : 'offline'}">${status.status}</span>`;
+    
+    // Update toggle
+    apiToggle.checked = isOnline;
+    
+    // Update details
+    const lastToggled = status.last_toggled 
+        ? new Date(status.last_toggled).toLocaleString() 
+        : 'Never';
+    const toggledBy = status.toggled_by || 'System';
+    
+    statusDetails.innerHTML = `
+        <div class="detail-row">
+            <label>Status:</label>
+            <span class="status-value">${status.status}</span>
+        </div>
+        <div class="detail-row">
+            <label>Last Toggled:</label>
+            <span class="status-value">${lastToggled}</span>
+        </div>
+        <div class="detail-row">
+            <label>Toggled By:</label>
+            <span class="status-value">${toggledBy}</span>
+        </div>
+    `;
+}
+
+async function handleApiToggle(event) {
+    const isChecked = event.target.checked;
+    const newStatus = isChecked ? 'online' : 'offline';
+    const messageDiv = document.getElementById('toggleMessage');
+    
+    try {
+        const response = await fetch(`${API_URL}/status/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                toggled_by: 'User'
+            })
+        });
+        
+        if (!response.ok) throw new Error('Failed to toggle API status');
+        
+        const result = await response.json();
+        
+        // Show success message
+        messageDiv.innerHTML = `
+            <div class="status-message success">
+                API has been turned ${newStatus.toUpperCase()}
+            </div>
+        `;
+        
+        setTimeout(() => {
+            messageDiv.innerHTML = '';
+        }, 3000);
+        
+        // Reload status
+        await loadApiStatus();
+    } catch (error) {
+        console.error('Error toggling API:', error);
+        messageDiv.innerHTML = `
+            <div class="status-message error">
+                Failed to toggle API status
+            </div>
+        `;
+    }
+}
             `;
         } else {
             resultDiv.innerHTML = `

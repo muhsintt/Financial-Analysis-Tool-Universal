@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, send_from_directory
+from flask import Flask, render_template, send_from_directory, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 
@@ -35,6 +35,7 @@ def create_app():
     from app.routes.uploads import uploads_bp
     from app.routes.categories import categories_bp
     from app.routes.rules import rules_bp
+    from app.routes.status import status_bp
     
     app.register_blueprint(transactions_bp)
     app.register_blueprint(budgets_bp)
@@ -42,6 +43,24 @@ def create_app():
     app.register_blueprint(uploads_bp)
     app.register_blueprint(categories_bp)
     app.register_blueprint(rules_bp)
+    app.register_blueprint(status_bp)
+    
+    # API Status Middleware
+    @app.before_request
+    def check_api_status():
+        """Check if API is enabled before processing requests"""
+        from app.models.api_status import ApiStatus
+        
+        # Always allow status endpoint and frontend routes
+        if request.path.startswith('/api/status') or not request.path.startswith('/api'):
+            return
+        
+        status = ApiStatus.query.first()
+        if status and not status.is_enabled:
+            return jsonify({
+                'error': 'API is currently offline for maintenance',
+                'status': 'offline'
+            }), 503
     
     # Frontend routes
     @app.route('/')
