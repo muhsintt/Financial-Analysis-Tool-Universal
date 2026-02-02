@@ -48,10 +48,11 @@ Thumbs.db
 backend/uploads/*
 !backend/uploads/.gitkeep
 
-# Bank Statements & Personal Data
+# Analysis files & Personal Data
 *.xlsx
 *.xls
 2025_JAN_FIN.xlsx
+financial_analysis-*.html
 
 # Node (if needed)
 node_modules/
