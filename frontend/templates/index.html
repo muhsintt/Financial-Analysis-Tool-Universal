@@ -23,6 +23,7 @@
                     <li><a href="#transactions" class="nav-link" data-page="transactions"><i class="fas fa-exchange-alt"></i> Transactions</a></li>
                     <li><a href="#budgets" class="nav-link" data-page="budgets"><i class="fas fa-piggy-bank"></i> Budgets</a></li>
                     <li><a href="#reports" class="nav-link" data-page="reports"><i class="fas fa-chart-bar"></i> Reports</a></li>
+                    <li><a href="#rules" class="nav-link" data-page="rules"><i class="fas fa-filter"></i> Categorization Rules</a></li>
                     <li><a href="#upload" class="nav-link" data-page="upload"><i class="fas fa-upload"></i> Upload</a></li>
                 </ul>
             </nav>
@@ -86,6 +87,42 @@
                             </div>
                         </div>
                         
+                        <div class="category-breakdown">
+                            <div class="breakdown-section">
+                                <h3>Income by Category</h3>
+                                <table class="breakdown-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Category</th>
+                                            <th>Amount</th>
+                                            <th>Count</th>
+                                            <th>% of Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="incomeByCategory">
+                                        <!-- Populated by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="breakdown-section">
+                                <h3>Expenses by Category</h3>
+                                <table class="breakdown-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Category</th>
+                                            <th>Amount</th>
+                                            <th>Count</th>
+                                            <th>% of Total</th>
+                                            <th>Avg per Transaction</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="expenseByCategory">
+                                        <!-- Populated by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
                         <div class="recent-transactions">
                             <h3>Recent Transactions</h3>
                             <div id="recentTransList" class="transaction-list">
@@ -142,12 +179,12 @@
                                     <th class="checkbox-col">
                                         <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)">
                                     </th>
-                                    <th>Date</th>
-                                    <th>Description</th>
-                                    <th>Category</th>
-                                    <th>Type</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
+                                    <th class="sortable" data-sort-field="date" onclick="sortTransactions('date')">Date <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-sort-field="description" onclick="sortTransactions('description')">Description <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-sort-field="category" onclick="sortTransactions('category')">Category <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-sort-field="type" onclick="sortTransactions('type')">Type <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-sort-field="amount" onclick="sortTransactions('amount')">Amount <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-sort-field="status" onclick="sortTransactions('status')">Status <span class="sort-indicator"></span></th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -198,6 +235,36 @@
                                 <!-- Populated by JavaScript -->
                             </div>
                         </div>
+                    </div>
+                </div>
+                
+                <!-- Categorization Rules Page -->
+                <div id="rules" class="page">
+                    <div class="page-header">
+                        <button class="btn btn-primary" id="addRuleBtn">
+                            <i class="fas fa-plus"></i> New Rule
+                        </button>
+                        <div class="search-bar" style="flex: 1; margin-left: 20px;">
+                            <input type="text" id="ruleSearchInput" placeholder="Search rules..." class="form-control">
+                        </div>
+                    </div>
+                    
+                    <div class="rules-container">
+                        <table class="rules-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Keywords</th>
+                                    <th>Category</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rulesBody">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
                 
@@ -347,6 +414,51 @@
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Create Budget</button>
                     <button type="button" class="btn btn-secondary" onclick="closeModal('budgetModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Rule Modal -->
+    <div id="ruleModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="ruleModalTitle">Add Categorization Rule</h2>
+            <form id="ruleForm">
+                <div class="form-group">
+                    <label>Rule Name</label>
+                    <input type="text" id="ruleName" class="form-control" placeholder="e.g., Grocery Stores" required>
+                </div>
+                <div class="form-group">
+                    <label>Keywords (comma-separated)</label>
+                    <textarea id="ruleKeywords" class="form-control" placeholder="e.g., whole foods, safeway, trader joes" required rows="3"></textarea>
+                    <small>Transactions matching any of these keywords will be categorized accordingly</small>
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="ruleCategory" class="form-control" required>
+                        <option value="">Select...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <input type="number" id="rulePriority" class="form-control" value="0" min="-100" max="100">
+                    <small>Higher priority rules are checked first</small>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="ruleActive" checked>
+                        Active
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Test Rule</label>
+                    <input type="text" id="ruleTestInput" class="form-control" placeholder="Enter a transaction description to test...">
+                    <div id="ruleTestResult" style="margin-top: 10px; display: none;"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save Rule</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('ruleModal')">Cancel</button>
                 </div>
             </form>
         </div>

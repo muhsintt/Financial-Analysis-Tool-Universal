@@ -41,29 +41,29 @@ def upload_file():
         # Save transactions to database
         created_count = 0
         for trans_data in transactions_data:
-            # Get or create category - only check by name, use correct type
-            category = Category.query.filter_by(
-                name=trans_data['category']
-            ).first()
+            # Use the category_id directly from file processor
+            category_id = trans_data.get('category_id')
             
-            if not category:
-                # Determine category type based on transaction type
-                category_type = 'income' if trans_data['category'] in ['Salary', 'Investment'] else 'expense'
-                category = Category(
-                    name=trans_data['category'],
-                    type=category_type,
-                    color='#3498db',
-                    icon='folder'
-                )
-                db.session.add(category)
-                db.session.flush()
+            # If no category_id, try to find or create default
+            if not category_id:
+                category = Category.query.filter_by(name='Uncategorized').first()
+                if not category:
+                    category = Category(
+                        name='Uncategorized',
+                        type='expense',
+                        color='#95a5a6',
+                        icon='question'
+                    )
+                    db.session.add(category)
+                    db.session.flush()
+                category_id = category.id
             
             transaction = Transaction(
                 description=trans_data['description'],
                 amount=float(trans_data['amount']),
                 type=trans_data['type'],
                 date=trans_data['date'],
-                category_id=category.id,
+                category_id=category_id,
                 source='upload',
                 notes=trans_data.get('notes', '')
             )

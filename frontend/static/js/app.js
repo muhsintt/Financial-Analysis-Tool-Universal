@@ -13,7 +13,11 @@ const state = {
         type: null
     },
     currentTransaction: null,
-    charts: {}
+    charts: {},
+    sortConfig: {
+        field: 'date',
+        direction: 'desc'
+    }
 };
 
 // Initialize on page load
@@ -64,6 +68,17 @@ function initializeEventListeners() {
     });
 
     document.getElementById('budgetForm').addEventListener('submit', handleBudgetSubmit);
+
+    // Rules
+    document.getElementById('addRuleBtn').addEventListener('click', () => {
+        document.getElementById('ruleForm').reset();
+        delete document.getElementById('ruleForm').dataset.ruleId;
+        document.getElementById('ruleModalTitle').textContent = 'Add Categorization Rule';
+        openModal('ruleModal');
+    });
+
+    document.getElementById('ruleForm').addEventListener('submit', handleRuleSubmit);
+    document.getElementById('ruleTestInput').addEventListener('input', testRule);
 
     // Filters
     document.getElementById('typeFilter').addEventListener('change', loadTransactions);
@@ -145,6 +160,7 @@ function navigateTo(page) {
         'transactions': 'Transactions',
         'budgets': 'Budgets',
         'reports': 'Reports',
+        'rules': 'Categorization Rules',
         'upload': 'Upload Bank Statement'
     };
     document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
@@ -162,6 +178,9 @@ function navigateTo(page) {
             break;
         case 'budgets':
             loadBudgets();
+            break;
+        case 'rules':
+            loadRules();
             break;
         case 'reports':
             loadReports();
@@ -257,6 +276,9 @@ async function loadDashboard() {
         // Update charts
         updateCategoryCharts(expenseData, incomeData);
 
+        // Update category breakdown tables
+        updateCategoryBreakdown(expenseData, incomeData);
+
         // Load recent transactions
         const transResponse = await fetch(`${API_URL}/transactions/?include_excluded=false`);
         const transactions = await transResponse.json();
@@ -339,6 +361,38 @@ function updateCategoryCharts(expenseData, incomeData) {
     }
 }
 
+// Update Category Breakdown Tables
+function updateCategoryBreakdown(expenseData, incomeData) {
+    // Update Income by Category table
+    const incomeBody = document.getElementById('incomeByCategory');
+    if (incomeBody && incomeData.categories.length > 0) {
+        const totalIncome = incomeData.categories.reduce((sum, cat) => sum + cat.amount, 0);
+        incomeBody.innerHTML = incomeData.categories.map(cat => `
+            <tr>
+                <td>${cat.category}</td>
+                <td>${formatCurrency(cat.amount)}</td>
+                <td>${cat.count}</td>
+                <td>${((cat.amount / totalIncome) * 100).toFixed(1)}%</td>
+            </tr>
+        `).join('');
+    }
+
+    // Update Expenses by Category table
+    const expenseBody = document.getElementById('expenseByCategory');
+    if (expenseBody && expenseData.categories.length > 0) {
+        const totalExpense = expenseData.categories.reduce((sum, cat) => sum + cat.amount, 0);
+        expenseBody.innerHTML = expenseData.categories.map(cat => `
+            <tr>
+                <td>${cat.category}</td>
+                <td>${formatCurrency(cat.amount)}</td>
+                <td>${cat.count}</td>
+                <td>${((cat.amount / totalExpense) * 100).toFixed(1)}%</td>
+                <td>${formatCurrency(cat.amount / cat.count)}</td>
+            </tr>
+        `).join('');
+    }
+}
+
 // Load Transactions
 async function loadTransactions() {
     try {
@@ -366,7 +420,8 @@ async function loadTransactions() {
         }
         
         state.transactions = transactions;
-        displayTransactions(state.transactions);
+        // Apply current sort configuration
+        sortTransactions(state.sortConfig.field);
     } catch (error) {
         console.error('Error loading transactions:', error);
     }
@@ -405,6 +460,66 @@ function displayTransactions(transactions) {
     `).join('');
 }
 
+// Sort Transactions
+function sortTransactions(field) {
+    // Toggle direction if clicking the same field
+    if (state.sortConfig.field === field) {
+        state.sortConfig.direction = state.sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        state.sortConfig.field = field;
+        state.sortConfig.direction = 'asc';
+    }
+    
+    // Sort the transactions
+    const sorted = [...state.transactions].sort((a, b) => {
+        let valueA, valueB;
+        
+        switch(field) {
+            case 'date':
+                valueA = new Date(a.date);
+                valueB = new Date(b.date);
+                break;
+            case 'description':
+                valueA = a.description.toLowerCase();
+                valueB = b.description.toLowerCase();
+                break;
+            case 'category':
+                valueA = a.category_name.toLowerCase();
+                valueB = b.category_name.toLowerCase();
+                break;
+            case 'type':
+                valueA = a.type.toLowerCase();
+                valueB = b.type.toLowerCase();
+                break;
+            case 'amount':
+                valueA = a.amount;
+                valueB = b.amount;
+                break;
+            case 'status':
+                valueA = a.is_excluded ? 1 : 0;
+                valueB = b.is_excluded ? 1 : 0;
+                break;
+            default:
+                return 0;
+        }
+        
+        if (valueA < valueB) return state.sortConfig.direction === 'asc' ? -1 : 1;
+        if (valueA > valueB) return state.sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    // Update UI indicators
+    document.querySelectorAll('table th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.sortField === field) {
+            th.classList.add(`sort-${state.sortConfig.direction}`);
+        }
+    });
+    
+    // Display sorted transactions
+    displayTransactions(sorted);
+}
+
 // Filter Transactions
 function filterTransactions() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
@@ -412,7 +527,46 @@ function filterTransactions() {
         t.description.toLowerCase().includes(searchTerm) ||
         t.category_name.toLowerCase().includes(searchTerm)
     );
-    displayTransactions(filtered);
+    
+    // Apply current sort to filtered results
+    const sorted = [...filtered].sort((a, b) => {
+        let valueA, valueB;
+        
+        switch(state.sortConfig.field) {
+            case 'date':
+                valueA = new Date(a.date);
+                valueB = new Date(b.date);
+                break;
+            case 'description':
+                valueA = a.description.toLowerCase();
+                valueB = b.description.toLowerCase();
+                break;
+            case 'category':
+                valueA = a.category_name.toLowerCase();
+                valueB = b.category_name.toLowerCase();
+                break;
+            case 'type':
+                valueA = a.type.toLowerCase();
+                valueB = b.type.toLowerCase();
+                break;
+            case 'amount':
+                valueA = a.amount;
+                valueB = b.amount;
+                break;
+            case 'status':
+                valueA = a.is_excluded ? 1 : 0;
+                valueB = b.is_excluded ? 1 : 0;
+                break;
+            default:
+                return 0;
+        }
+        
+        if (valueA < valueB) return state.sortConfig.direction === 'asc' ? -1 : 1;
+        if (valueA > valueB) return state.sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    displayTransactions(sorted);
 }
 
 // Handle Transaction Submit
@@ -1107,4 +1261,191 @@ function openModal(modalId) {
 
 function closeModal(modalId) {
     document.getElementById(modalId).classList.remove('show');
+}
+
+// ============ CATEGORIZATION RULES ============
+
+// Load Rules
+async function loadRules() {
+    if (state.currentPage !== 'rules') return;
+    
+    try {
+        const response = await fetch(`${API_URL}/rules/`);
+        if (!response.ok) throw new Error('Failed to load rules');
+        
+        const rules = await response.json();
+        displayRules(rules);
+    } catch (error) {
+        console.error('Error loading rules:', error);
+    }
+}
+
+// Display Rules
+function displayRules(rules) {
+    const tbody = document.getElementById('rulesBody');
+    tbody.innerHTML = rules.map(r => `
+        <tr>
+            <td><strong>${r.name}</strong></td>
+            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${r.keywords}</td>
+            <td>${r.category_name}</td>
+            <td>${r.priority}</td>
+            <td>
+                <span class="rule-status ${r.is_active ? 'active' : 'inactive'}">
+                    ${r.is_active ? 'Active' : 'Inactive'}
+                </span>
+            </td>
+            <td>
+                <div class="actions">
+                    <button class="btn-icon edit" title="Edit" onclick="editRule(${r.id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn-icon delete" title="Delete" onclick="deleteRule(${r.id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Edit Rule
+async function editRule(id) {
+    try {
+        const response = await fetch(`${API_URL}/rules/${id}`);
+        if (!response.ok) throw new Error('Failed to load rule');
+        
+        const rule = await response.json();
+        
+        // Populate form
+        document.getElementById('ruleName').value = rule.name;
+        document.getElementById('ruleKeywords').value = rule.keywords;
+        document.getElementById('ruleCategory').value = rule.category_id;
+        document.getElementById('rulePriority').value = rule.priority;
+        document.getElementById('ruleActive').checked = rule.is_active;
+        
+        // Update form to edit mode
+        document.getElementById('ruleModalTitle').textContent = 'Edit Categorization Rule';
+        document.getElementById('ruleForm').dataset.ruleId = id;
+        
+        openModal('ruleModal');
+    } catch (error) {
+        console.error('Error loading rule:', error);
+        alert('Failed to load rule');
+    }
+}
+
+// Delete Rule
+async function deleteRule(id) {
+    if (!confirm('Are you sure you want to delete this rule?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/rules/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('Failed to delete rule');
+        
+        loadRules();
+    } catch (error) {
+        console.error('Error deleting rule:', error);
+        alert('Failed to delete rule');
+    }
+}
+
+// Handle Rule Submit
+async function handleRuleSubmit(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('ruleName').value.trim();
+    const keywords = document.getElementById('ruleKeywords').value.trim();
+    const category_id = parseInt(document.getElementById('ruleCategory').value);
+    const priority = parseInt(document.getElementById('rulePriority').value);
+    const is_active = document.getElementById('ruleActive').checked;
+    const ruleId = document.getElementById('ruleForm').dataset.ruleId;
+    
+    if (!name || !keywords || !category_id) {
+        alert('Please fill all required fields');
+        return;
+    }
+    
+    try {
+        const url = ruleId ? 
+            `${API_URL}/rules/${ruleId}` :
+            `${API_URL}/rules/`;
+        
+        const method = ruleId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name,
+                keywords,
+                category_id,
+                priority,
+                is_active
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save rule');
+        }
+        
+        closeModal('ruleModal');
+        delete document.getElementById('ruleForm').dataset.ruleId;
+        document.getElementById('ruleForm').reset();
+        document.getElementById('ruleModalTitle').textContent = 'Add Categorization Rule';
+        
+        loadRules();
+    } catch (error) {
+        console.error('Error saving rule:', error);
+        alert(error.message);
+    }
+}
+
+// Test Rule
+async function testRule() {
+    const testInput = document.getElementById('ruleTestInput').value.trim();
+    if (!testInput) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/rules/test`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                description: testInput
+            })
+        });
+        
+        if (!response.ok) throw new Error('Test failed');
+        
+        const result = await response.json();
+        const resultDiv = document.getElementById('ruleTestResult');
+        
+        if (result.primary_match) {
+            resultDiv.innerHTML = `
+                <div style="padding: 10px; background: #d4edda; border-radius: 4px; color: #155724;">
+                    <strong>Match Found!</strong><br>
+                    Rule: ${result.primary_match.rule_name}<br>
+                    Category: ${result.primary_match.category_name}<br>
+                    Priority: ${result.primary_match.priority}
+                </div>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <div style="padding: 10px; background: #f8d7da; border-radius: 4px; color: #721c24;">
+                    No matching rules found. Would use default category.
+                </div>
+            `;
+        }
+        
+        resultDiv.style.display = 'block';
+    } catch (error) {
+        console.error('Error testing rule:', error);
+    }
 }

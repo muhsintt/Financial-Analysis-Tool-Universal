@@ -34,12 +34,14 @@ def create_app():
     from app.routes.reports import reports_bp
     from app.routes.uploads import uploads_bp
     from app.routes.categories import categories_bp
+    from app.routes.rules import rules_bp
     
     app.register_blueprint(transactions_bp)
     app.register_blueprint(budgets_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(uploads_bp)
     app.register_blueprint(categories_bp)
+    app.register_blueprint(rules_bp)
     
     # Frontend routes
     @app.route('/')

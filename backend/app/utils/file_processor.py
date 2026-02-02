@@ -8,40 +8,57 @@ def detect_transaction_type(description, amount):
         return 'expense'
     return 'income'
 
-def categorize_transaction(description):
-    """Automatically categorize transaction based on description"""
+def categorize_transaction(description, category_id=None):
+    """
+    Automatically categorize transaction based on description using database rules.
+    Falls back to rule-based matching if category_id not found.
+    Returns category_id or None
+    """
+    from app.models.categorization_rule import CategorizationRule
+    from app.models.category import Category
+    
+    # If category_id provided, validate it exists
+    if category_id:
+        category = Category.query.get(category_id)
+        if category:
+            return category_id
+    
+    # Check categorization rules in priority order
+    rules = CategorizationRule.query.filter_by(is_active=True).order_by(
+        CategorizationRule.priority.desc()
+    ).all()
+    
+    for rule in rules:
+        if rule.matches(description):
+            return rule.category_id
+    
+    # Fallback: Hardcoded rules if no database rules match
     description_lower = description.lower()
     
-    # Expense categories
-    if any(word in description_lower for word in ['grocery', 'supermarket', 'food', 'market', 'frys', 'walmart', 'safeway', 'whole foods']):
-        return 'Groceries'
-    elif any(word in description_lower for word in ['restaurant', 'cafe', 'pizza', 'burger', 'coffee', 'mcd', 'chipotle', 'chick-fil']):
-        return 'Restaurants'
-    elif any(word in description_lower for word in ['uber', 'taxi', 'gas', 'fuel', 'parking', 'transit', 'amtrak', 'lyft', 'shell', 'chevron', 'speedway']):
-        return 'Transportation'
-    elif any(word in description_lower for word in ['electric', 'water', 'gas bill', 'internet', 'phone', 'comcast', 'verizon', 'at&t', 'utility', 'city of']):
-        return 'Utilities'
-    elif any(word in description_lower for word in ['movie', 'concert', 'game', 'entertainment', 'netflix', 'hulu', 'disney', 'steam', 'playstation', 'xbox', 'nintendo']):
-        return 'Entertainment'
-    elif any(word in description_lower for word in ['amazon', 'walmart', 'target', 'mall', 'store', 'shop', 'ebay', 'etsy', 'best buy']):
-        return 'Shopping'
-    elif any(word in description_lower for word in ['doctor', 'hospital', 'pharmacy', 'medicine', 'cvs', 'walgreens', 'dental', 'clinic', 'health']):
-        return 'Healthcare'
-    elif any(word in description_lower for word in ['insurance', 'aarp', 'geico', 'state farm']):
-        return 'Insurance'
-    elif any(word in description_lower for word in ['rent', 'mortgage', 'landlord', 'property']):
-        return 'Rent/Mortgage'
-    elif any(word in description_lower for word in ['salary', 'wages', 'paycheck', 'payroll']):
-        return 'Salary'
-    elif any(word in description_lower for word in ['investment', 'dividend', 'interest', 'stock', 'broker']):
-        return 'Investment'
-    elif any(word in description_lower for word in ['paypal', 'stripe', 'square']):
-        return 'Online Payment'
-    elif any(word in description_lower for word in ['atm', 'withdrawal', 'cash']):
-        return 'Cash'
+    # Try to find category by name
+    category_map = {
+        'Groceries': ['grocery', 'supermarket', 'food', 'market', 'frys', 'walmart', 'safeway', 'whole foods'],
+        'Restaurants & Dining': ['restaurant', 'cafe', 'pizza', 'burger', 'coffee', 'mcd', 'chipotle', 'chick-fil'],
+        'Transportation': ['uber', 'taxi', 'gas', 'fuel', 'parking', 'transit', 'amtrak', 'lyft', 'shell', 'chevron', 'speedway'],
+        'Utilities': ['electric', 'water', 'gas bill', 'internet', 'phone', 'comcast', 'verizon', 'at&t', 'utility', 'city of'],
+        'Entertainment/Subscriptions': ['movie', 'concert', 'game', 'entertainment', 'netflix', 'hulu', 'disney', 'steam', 'playstation', 'xbox', 'nintendo'],
+        'Shopping/Retail': ['amazon', 'walmart', 'target', 'mall', 'store', 'shop', 'ebay', 'etsy', 'best buy'],
+        'Health & Pharmacy': ['doctor', 'hospital', 'pharmacy', 'medicine', 'cvs', 'walgreens', 'dental', 'clinic', 'health'],
+        'Insurance': ['insurance', 'aarp', 'geico', 'state farm'],
+        'Housing': ['rent', 'mortgage', 'landlord', 'property'],
+        'Income': ['salary', 'wages', 'paycheck', 'payroll'],
+    }
     
-    # Default
-    return 'Other'
+    for category_name, keywords in category_map.items():
+        if any(word in description_lower for word in keywords):
+            category = Category.query.filter_by(name=category_name).first()
+            if category:
+                return category.id
+    
+    # Default to 'Uncategorized'
+    default_category = Category.query.filter_by(name='Uncategorized').first()
+    return default_category.id if default_category else None
+
 
 def process_csv_file(filepath, limit=None):
     """Process CSV file and extract transactions"""
@@ -77,13 +94,14 @@ def process_csv_file(filepath, limit=None):
                 
                 trans_type = detect_transaction_type(desc, amount)
                 amount = abs(amount)  # Store as positive
+                category_id = categorize_transaction(desc)
                 
                 transactions.append({
                     'date': transaction_date,
                     'description': desc.strip(),
                     'amount': amount,
                     'type': trans_type,
-                    'category': categorize_transaction(desc)
+                    'category_id': category_id
                 })
         
         return transactions
@@ -172,13 +190,14 @@ def process_excel_file(filepath, limit=None):
             
             trans_type = detect_transaction_type(str(desc_val), amount)
             amount = abs(amount)
+            category_id = categorize_transaction(str(desc_val))
             
             transactions.append({
                 'date': transaction_date,
                 'description': str(desc_val).strip(),
                 'amount': amount,
                 'type': trans_type,
-                'category': categorize_transaction(str(desc_val))
+                'category_id': category_id
             })
         
         return transactions
