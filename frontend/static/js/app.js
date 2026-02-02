@@ -375,14 +375,16 @@ function displayTransactions(transactions) {
             <td>${t.category_name}</td>
             <td><span class="tag ${t.type}">${t.type}</span></td>
             <td class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</td>
-            <td><span class="tag ${t.is_excluded ? 'excluded' : ''}">${t.is_excluded ? 'Excluded' : 'Included'}</span></td>
+            <td>
+                <select class="status-select" onchange="updateTransactionStatus(${t.id}, this.value)">
+                    <option value="false" ${!t.is_excluded ? 'selected' : ''}>Included</option>
+                    <option value="true" ${t.is_excluded ? 'selected' : ''}>Excluded</option>
+                </select>
+            </td>
             <td>
                 <div class="actions">
                     <button class="btn-icon edit" title="Edit" onclick="editTransaction(${t.id})">
                         <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn-icon exclude" title="Toggle Exclude" onclick="toggleExclude(${t.id})">
-                        <i class="fas fa-eye-slash"></i>
                     </button>
                     <button class="btn-icon delete" title="Delete" onclick="deleteTransaction(${t.id})">
                         <i class="fas fa-trash"></i>
@@ -489,30 +491,26 @@ async function deleteTransaction(id) {
     }
 }
 
-// Toggle Exclude
-async function toggleExclude(id) {
+// Update Transaction Status (from dropdown)
+async function updateTransactionStatus(id, status) {
+    const isExcluded = status === 'true';
     try {
-        // Get the current transaction
-        const trans = state.transactions.find(t => t.id === id);
-        if (!trans) throw new Error('Transaction not found');
-
-        // Toggle the excluded status
         const response = await fetch(`${API_URL}/transactions/${id}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                is_excluded: !trans.is_excluded
+                is_excluded: isExcluded
             })
         });
 
-        if (!response.ok) throw new Error('Failed to toggle exclude');
+        if (!response.ok) throw new Error('Failed to update transaction status');
 
         loadTransactions();
     } catch (error) {
-        console.error('Error toggling exclude:', error);
-        alert('Error toggling exclude status');
+        console.error('Error updating status:', error);
+        alert('Error updating transaction status');
     }
 }
 
