@@ -1,9 +1,33 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.user import User
+from app.models.activity_log import ActivityLog
+from app.models.log_settings import LogSettings
 from app.routes.auth import superuser_required, login_required
+import json
 
 users_bp = Blueprint('users', __name__, url_prefix='/api/users')
+
+def log_activity(action, description, details=None):
+    """Helper to log user management activities - checks settings before logging"""
+    try:
+        settings = LogSettings.get_settings()
+        if not settings.should_log(action, ActivityLog.CATEGORY_USER):
+            return
+    except:
+        pass
+    
+    log = ActivityLog(
+        action=action,
+        category=ActivityLog.CATEGORY_USER,
+        description=description,
+        details=json.dumps(details) if details else None,
+        user_id=session.get('user_id'),
+        username=session.get('username', 'anonymous'),
+        ip_address=request.remote_addr
+    )
+    db.session.add(log)
+    db.session.commit()
 
 @users_bp.route('/', methods=['GET'])
 @login_required
@@ -71,6 +95,13 @@ def create_user():
     db.session.add(user)
     db.session.commit()
     
+    # Log user creation
+    log_activity(
+        ActivityLog.ACTION_CREATE,
+        f'Created user: {username} ({role})',
+        {'new_user_id': user.id, 'username': username, 'role': role}
+    )
+    
     return jsonify(user.to_dict()), 201
 
 @users_bp.route('/<int:id>', methods=['PUT'])
@@ -108,6 +139,14 @@ def update_user(id):
         user.set_password(data['password'])
     
     db.session.commit()
+    
+    # Log user update
+    log_activity(
+        ActivityLog.ACTION_UPDATE,
+        f'Updated user: {user.username}',
+        {'updated_user_id': id, 'changes': list(data.keys())}
+    )
+    
     return jsonify(user.to_dict())
 
 @users_bp.route('/<int:id>', methods=['DELETE'])
@@ -126,8 +165,16 @@ def delete_user(id):
     if user.id == session['user_id']:
         return jsonify({'error': 'Cannot delete your own account'}), 400
     
+    username = user.username
     db.session.delete(user)
     db.session.commit()
+    
+    # Log user deletion
+    log_activity(
+        ActivityLog.ACTION_DELETE,
+        f'Deleted user: {username}',
+        {'deleted_user_id': id, 'username': username}
+    )
     
     return jsonify({'message': 'User deleted successfully'}), 200
 

@@ -187,6 +187,40 @@ body {
 .date-selector {
     display: flex;
     gap: 10px;
+    align-items: center;
+}
+
+/* Apply Calendar Button */
+.btn-apply-calendar {
+    padding: 8px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.btn-apply-calendar i {
+    font-size: 12px;
+}
+
+/* Calendar Type Selector */
+#calendarTypeSelect {
+    min-width: 130px;
+    background-color: #fff;
+    cursor: pointer;
+}
+
+#calendarTypeSelect option[value="badi"] {
+    font-style: italic;
+}
+
+#badiMonthPicker {
+    min-width: 180px;
+}
+
+#badiYearPicker {
+    min-width: 100px;
 }
 
 .form-control {
@@ -1475,6 +1509,11 @@ input:checked + .slider:before {
         flex-direction: column;
     }
 
+    .btn-apply-calendar {
+        width: 100%;
+        justify-content: center;
+    }
+
     .page-content {
         padding: 15px;
     }
@@ -1828,7 +1867,8 @@ body.read-only #applyRulesBtn,
 body.read-only #confirmUploadBtn,
 body.read-only .btn-icon.edit,
 body.read-only .btn-icon.delete,
-body.read-only #userManagementSection {
+body.read-only #userManagementSection,
+body.read-only #dataManagementSection {
     display: none !important;
 }
 
@@ -1838,3 +1878,619 @@ body.read-only .toggle-section {
     opacity: 0.5;
 }
 
+/* Data Management Section */
+.data-management-card {
+    background: white;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.data-management-card h3 {
+    margin-bottom: 10px;
+    color: var(--dark);
+}
+
+.data-management-card .warning-text {
+    color: #dc3545;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+.data-management-card .warning-text i {
+    margin-right: 5px;
+}
+
+.clear-options {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.clear-option {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+}
+
+.clear-option h4 {
+    margin-bottom: 15px;
+    color: var(--secondary);
+    font-size: 16px;
+}
+
+.clear-option p {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 15px;
+}
+
+.clear-form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.clear-form .form-control {
+    max-width: 180px;
+}
+
+.date-separator {
+    color: #666;
+    font-size: 14px;
+}
+
+.clear-all-option {
+    background: #fff5f5;
+    border-color: #f8d7da;
+}
+
+.clear-all-option h4 {
+    color: #dc3545;
+}
+
+/* Confirmation Modal Styles */
+.confirm-delete-content {
+    text-align: center;
+    padding: 20px 0;
+}
+
+.confirm-delete-content p {
+    margin-bottom: 10px;
+    font-size: 15px;
+}
+
+.confirm-delete-content .transaction-count {
+    font-size: 18px;
+    color: var(--dark);
+}
+
+.confirm-delete-content .warning-text {
+    color: #dc3545;
+    font-size: 14px;
+    margin-top: 15px;
+}
+
+/* Upload History Section */
+.upload-history-section {
+    margin-top: 30px;
+    background: white;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.upload-history-section .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.upload-history-section h3 {
+    margin: 0;
+    color: var(--secondary);
+}
+
+.upload-history-section h3 i {
+    margin-right: 10px;
+    color: var(--primary);
+}
+
+.upload-history-table-container {
+    overflow-x: auto;
+}
+
+.upload-history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.upload-history-table th,
+.upload-history-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.upload-history-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: var(--secondary);
+    font-size: 13px;
+    text-transform: uppercase;
+}
+
+.upload-history-table tr:hover {
+    background: #f8f9fa;
+}
+
+.upload-history-table .checkbox-col {
+    width: 40px;
+    text-align: center;
+}
+
+.upload-history-table .file-type {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.upload-history-table .file-type.csv {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.upload-history-table .file-type.xlsx,
+.upload-history-table .file-type.xls {
+    background: #e8f5e9;
+    color: #388e3c;
+}
+
+.upload-history-table .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.upload-history-table .status-badge.completed {
+    background: #d4edda;
+    color: #155724;
+}
+
+.upload-history-table .status-badge.failed {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.upload-history-table .status-badge.processing {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.upload-history-table .actions {
+    display: flex;
+    gap: 8px;
+}
+
+.upload-history-table .actions .btn-icon {
+    padding: 6px 10px;
+    font-size: 14px;
+}
+
+.no-data-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+}
+
+.no-data-message i {
+    font-size: 48px;
+    margin-bottom: 15px;
+    color: #dee2e6;
+}
+
+.no-data-message p {
+    margin: 0;
+    font-size: 15px;
+}
+
+.bulk-upload-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.bulk-upload-actions span {
+    font-weight: 500;
+    color: var(--secondary);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+/* Activity Logs Styles */
+.activity-logs-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.activity-logs-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.activity-logs-filters .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.activity-logs-filters label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--secondary);
+}
+
+.activity-logs-filters select,
+.activity-logs-filters input {
+    min-width: 150px;
+}
+
+.activity-logs-table-container {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.activity-logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.activity-logs-table th,
+.activity-logs-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.activity-logs-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: var(--secondary);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.activity-logs-table tr:hover {
+    background: #f8f9fa;
+}
+
+.activity-logs-table .time-cell {
+    white-space: nowrap;
+    color: #666;
+    font-size: 12px;
+}
+
+.activity-logs-table .time-ago {
+    display: block;
+    font-size: 11px;
+    color: #999;
+}
+
+.activity-logs-table .user-cell {
+    font-weight: 500;
+}
+
+.activity-logs-table .action-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.activity-logs-table .action-badge.login,
+.activity-logs-table .action-badge.logout {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.activity-logs-table .action-badge.create,
+.activity-logs-table .action-badge.upload {
+    background: #e8f5e9;
+    color: #388e3c;
+}
+
+.activity-logs-table .action-badge.update,
+.activity-logs-table .action-badge.toggle {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.activity-logs-table .action-badge.delete,
+.activity-logs-table .action-badge.bulk_delete {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.activity-logs-table .action-badge.download {
+    background: #e0f2f1;
+    color: #00796b;
+}
+
+.activity-logs-table .action-badge.password_change {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.activity-logs-table .category-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: #f5f5f5;
+    color: #666;
+}
+
+.activity-logs-table .description-cell {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.activity-logs-table .ip-cell {
+    font-family: monospace;
+    font-size: 12px;
+    color: #666;
+}
+
+.activity-logs-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+.activity-logs-pagination #activityPageInfo {
+    font-size: 13px;
+    color: #666;
+}
+
+.activity-logs-actions {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    text-align: right;
+}
+
+.activity-logs-table .empty-row td {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+}
+
+/* Log Settings Styles */
+.log-settings-card {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.log-settings-card h3 {
+    margin-bottom: 20px;
+    color: var(--secondary);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.log-setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.setting-label strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.setting-description {
+    font-size: 12px;
+    color: #666;
+    margin: 0;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 26px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--success);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(24px);
+}
+
+.log-setting-group {
+    padding: 15px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.log-setting-group h4 {
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: var(--secondary);
+}
+
+.log-checkboxes-row {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+}
+
+.log-checkbox-group strong {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #555;
+}
+
+.checkbox-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.checkbox-list label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #f5f5f5;
+}
+
+.checkbox-list label:hover {
+    background: #e8e8e8;
+}
+
+.retention-settings,
+.export-settings {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.form-group.inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-group.inline label {
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.checkbox-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.file-destination-settings {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.form-row .form-group {
+    flex: 1;
+    min-width: 150px;
+}
+
+.destination-config {
+    margin-top: 15px;
+}
+
+.destination-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #ddd;
+}
+
+.log-settings-actions {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    text-align: right;
+}
+
+/* Disabled state for log settings */
+#logSettingsGroup.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}

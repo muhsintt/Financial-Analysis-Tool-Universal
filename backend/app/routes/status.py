@@ -1,9 +1,33 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 from app import db
 from app.models.api_status import ApiStatus
+from app.models.activity_log import ActivityLog
+from app.models.log_settings import LogSettings
 from datetime import datetime
+import json
 
 status_bp = Blueprint('status', __name__, url_prefix='/api/status')
+
+def log_activity(action, description, details=None):
+    """Helper to log settings activities - checks settings before logging"""
+    try:
+        settings = LogSettings.get_settings()
+        if not settings.should_log(action, ActivityLog.CATEGORY_SETTINGS):
+            return
+    except:
+        pass
+    
+    log = ActivityLog(
+        action=action,
+        category=ActivityLog.CATEGORY_SETTINGS,
+        description=description,
+        details=json.dumps(details) if details else None,
+        user_id=session.get('user_id'),
+        username=session.get('username', 'anonymous'),
+        ip_address=request.remote_addr
+    )
+    db.session.add(log)
+    db.session.commit()
 
 def get_or_create_api_status():
     """Get or create the API status record"""
@@ -32,6 +56,14 @@ def toggle_api():
     status.last_toggled_by = data.get('toggled_by', 'user')
     
     db.session.commit()
+    
+    # Log the toggle
+    new_state = 'enabled' if status.is_enabled else 'disabled'
+    log_activity(
+        ActivityLog.ACTION_TOGGLE,
+        f'API {new_state}',
+        {'new_state': new_state, 'toggled_by': status.last_toggled_by}
+    )
     
     return jsonify({
         'message': f'API is now {status.to_dict()["status"]}',

@@ -1,9 +1,33 @@
 from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.user import User
+from app.models.activity_log import ActivityLog
+from app.models.log_settings import LogSettings
 from functools import wraps
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+
+def log_activity(action, category, description, details=None):
+    """Helper to log activities - checks settings before logging"""
+    import json
+    try:
+        settings = LogSettings.get_settings()
+        if not settings.should_log(action, category):
+            return
+    except:
+        pass  # If settings fail, log anyway
+    
+    log = ActivityLog(
+        action=action,
+        category=category,
+        description=description,
+        details=json.dumps(details) if details else None,
+        user_id=session.get('user_id'),
+        username=session.get('username', 'anonymous'),
+        ip_address=request.remote_addr
+    )
+    db.session.add(log)
+    db.session.commit()
 
 def login_required(f):
     """Decorator to require login for a route"""
@@ -58,6 +82,14 @@ def login():
     session['role'] = user.role
     session.permanent = True
     
+    # Log successful login
+    log_activity(
+        ActivityLog.ACTION_LOGIN,
+        ActivityLog.CATEGORY_AUTH,
+        f'User {user.username} logged in',
+        {'user_id': user.id, 'role': user.role}
+    )
+    
     return jsonify({
         'message': 'Login successful',
         'user': user.to_dict()
@@ -66,6 +98,22 @@ def login():
 @auth_bp.route('/logout', methods=['POST'])
 def logout():
     """Logout endpoint"""
+    username = session.get('username', 'unknown')
+    user_id = session.get('user_id')
+    
+    # Log logout before clearing session
+    if user_id:
+        log = ActivityLog(
+            action=ActivityLog.ACTION_LOGOUT,
+            category=ActivityLog.CATEGORY_AUTH,
+            description=f'User {username} logged out',
+            user_id=user_id,
+            username=username,
+            ip_address=request.remote_addr
+        )
+        db.session.add(log)
+        db.session.commit()
+    
     session.clear()
     return jsonify({'message': 'Logged out successfully'})
 
@@ -107,5 +155,13 @@ def change_password():
     
     user.set_password(new_password)
     db.session.commit()
+    
+    # Log password change
+    log_activity(
+        ActivityLog.ACTION_PASSWORD_CHANGE,
+        ActivityLog.CATEGORY_AUTH,
+        f'User {user.username} changed their password',
+        {'user_id': user.id}
+    )
     
     return jsonify({'message': 'Password changed successfully'})

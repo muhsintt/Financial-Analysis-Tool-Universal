@@ -1,0 +1,9 @@
+name,keywords,category_name,category_type,priority,is_active
+Grocery Stores,"walmart,target,costco,safeway,kroger,whole foods,trader joe",Groceries,expense,10,true
+Restaurants & Dining,"restaurant,mcdonald,starbucks,chipotle,subway,pizza,cafe,diner",Dining Out,expense,8,true
+Gas Stations,"shell,chevron,exxon,bp,mobil,gas,fuel,petrol",Transportation,expense,9,true
+Streaming Services,"netflix,hulu,spotify,disney+,amazon prime,youtube,apple tv",Entertainment,expense,7,true
+Utilities,"electric,water,gas bill,internet,comcast,verizon,at&t,utility",Utilities,expense,6,true
+Payroll Income,"payroll,salary,direct deposit,wages,paycheck",Salary,income,10,true
+Bank Interest,"interest payment,interest earned,dividend",Investment Income,income,5,true
+Bahá'í Fund Contributions,"bahai fund,huququllah,continental fund,national fund,local fund",Contributions,expense,8,true

@@ -1,11 +1,35 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.transaction import Transaction
 from app.models.category import Category
+from app.models.activity_log import ActivityLog
+from app.models.log_settings import LogSettings
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_
+import json
 
 transactions_bp = Blueprint('transactions', __name__, url_prefix='/api/transactions')
+
+def log_activity(action, description, details=None):
+    """Helper to log transaction activities - checks settings before logging"""
+    try:
+        settings = LogSettings.get_settings()
+        if not settings.should_log(action, ActivityLog.CATEGORY_TRANSACTION):
+            return
+    except:
+        pass
+    
+    log = ActivityLog(
+        action=action,
+        category=ActivityLog.CATEGORY_TRANSACTION,
+        description=description,
+        details=json.dumps(details) if details else None,
+        user_id=session.get('user_id'),
+        username=session.get('username', 'anonymous'),
+        ip_address=request.remote_addr
+    )
+    db.session.add(log)
+    db.session.commit()
 
 @transactions_bp.route('/', methods=['GET'])
 def get_transactions():
@@ -70,6 +94,13 @@ def create_transaction():
     db.session.add(transaction)
     db.session.commit()
     
+    # Log the activity
+    log_activity(
+        ActivityLog.ACTION_CREATE,
+        f'Created transaction: {data["description"][:50]}',
+        {'transaction_id': transaction.id, 'amount': float(data['amount']), 'type': data['type']}
+    )
+    
     return jsonify(transaction.to_dict()), 201
 
 @transactions_bp.route('/<int:id>', methods=['PUT'])
@@ -97,14 +128,32 @@ def update_transaction(id):
         transaction.notes = data['notes']
     
     db.session.commit()
+    
+    # Log the activity
+    log_activity(
+        ActivityLog.ACTION_UPDATE,
+        f'Updated transaction: {transaction.description[:50]}',
+        {'transaction_id': id, 'changes': data}
+    )
+    
     return jsonify(transaction.to_dict())
 
 @transactions_bp.route('/<int:id>', methods=['DELETE'])
 def delete_transaction(id):
     """Delete a transaction"""
     transaction = Transaction.query.get_or_404(id)
+    desc = transaction.description[:50]
+    amount = transaction.amount
     db.session.delete(transaction)
     db.session.commit()
+    
+    # Log the activity
+    log_activity(
+        ActivityLog.ACTION_DELETE,
+        f'Deleted transaction: {desc}',
+        {'transaction_id': id, 'amount': amount}
+    )
+    
     return jsonify({'message': 'Transaction deleted'}), 204
 
 @transactions_bp.route('/exclude/<int:id>', methods=['PUT'])
@@ -268,3 +317,148 @@ def bulk_delete_by_file():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+@transactions_bp.route('/clear/all', methods=['DELETE'])
+def clear_all_transactions():
+    """Delete all transactions"""
+    try:
+        count = Transaction.query.count()
+        Transaction.query.delete()
+        db.session.commit()
+        
+        # Log the activity
+        log_activity(
+            ActivityLog.ACTION_BULK_DELETE,
+            f'Cleared all transactions ({count} deleted)',
+            {'deleted_count': count, 'clear_type': 'all'}
+        )
+        
+        return jsonify({
+            'message': f'All {count} transaction(s) deleted',
+            'deleted_count': count
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@transactions_bp.route('/clear/by-date', methods=['DELETE'])
+def clear_transactions_by_date():
+    """Delete transactions for a specific date"""
+    target_date = request.args.get('date')
+    
+    if not target_date:
+        return jsonify({'error': 'Date parameter is required (format: YYYY-MM-DD)'}), 400
+    
+    try:
+        parsed_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+        
+        transactions = Transaction.query.filter(Transaction.date == parsed_date).all()
+        count = len(transactions)
+        
+        for t in transactions:
+            db.session.delete(t)
+        
+        db.session.commit()
+        
+        # Log the activity
+        log_activity(
+            ActivityLog.ACTION_BULK_DELETE,
+            f'Cleared transactions for {target_date} ({count} deleted)',
+            {'deleted_count': count, 'clear_type': 'date', 'date': target_date}
+        )
+        
+        return jsonify({
+            'message': f'{count} transaction(s) deleted for {target_date}',
+            'deleted_count': count,
+            'date': target_date
+        })
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@transactions_bp.route('/clear/by-period', methods=['DELETE'])
+def clear_transactions_by_period():
+    """Delete transactions within a date range"""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    if not start_date or not end_date:
+        return jsonify({'error': 'Both start_date and end_date are required (format: YYYY-MM-DD)'}), 400
+    
+    try:
+        parsed_start = datetime.strptime(start_date, '%Y-%m-%d').date()
+        parsed_end = datetime.strptime(end_date, '%Y-%m-%d').date()
+        
+        if parsed_start > parsed_end:
+            return jsonify({'error': 'start_date must be before or equal to end_date'}), 400
+        
+        transactions = Transaction.query.filter(
+            Transaction.date >= parsed_start,
+            Transaction.date <= parsed_end
+        ).all()
+        count = len(transactions)
+        
+        for t in transactions:
+            db.session.delete(t)
+        
+        db.session.commit()
+        
+        # Log the activity
+        log_activity(
+            ActivityLog.ACTION_BULK_DELETE,
+            f'Cleared transactions from {start_date} to {end_date} ({count} deleted)',
+            {'deleted_count': count, 'clear_type': 'period', 'start_date': start_date, 'end_date': end_date}
+        )
+        
+        return jsonify({
+            'message': f'{count} transaction(s) deleted from {start_date} to {end_date}',
+            'deleted_count': count,
+            'start_date': start_date,
+            'end_date': end_date
+        })
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@transactions_bp.route('/clear/preview', methods=['GET'])
+def preview_clear_transactions():
+    """Preview how many transactions would be deleted"""
+    clear_type = request.args.get('type', 'all')  # 'all', 'date', or 'period'
+    target_date = request.args.get('date')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    try:
+        if clear_type == 'all':
+            count = Transaction.query.count()
+            return jsonify({'count': count, 'type': 'all'})
+        
+        elif clear_type == 'date':
+            if not target_date:
+                return jsonify({'error': 'Date parameter is required'}), 400
+            parsed_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+            count = Transaction.query.filter(Transaction.date == parsed_date).count()
+            return jsonify({'count': count, 'type': 'date', 'date': target_date})
+        
+        elif clear_type == 'period':
+            if not start_date or not end_date:
+                return jsonify({'error': 'Both start_date and end_date are required'}), 400
+            parsed_start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            parsed_end = datetime.strptime(end_date, '%Y-%m-%d').date()
+            count = Transaction.query.filter(
+                Transaction.date >= parsed_start,
+                Transaction.date <= parsed_end
+            ).count()
+            return jsonify({'count': count, 'type': 'period', 'start_date': start_date, 'end_date': end_date})
+        
+        else:
+            return jsonify({'error': 'Invalid type. Use: all, date, or period'}), 400
+            
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

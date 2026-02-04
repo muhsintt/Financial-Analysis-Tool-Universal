@@ -121,6 +121,27 @@ File Requirements:
 3. **Budget vs Actual**: Compare budgeted amounts with actual spending
 4. **Category Breakdown**: Detailed breakdown of expenses by category
 
+### Categorization Rules
+
+Rules allow automatic categorization of transactions based on keywords.
+
+1. Click **"Settings"** > **"Categorization Rules"**
+2. **Create Rules**: Click "New Rule" and enter name, keywords (comma-separated), and category
+3. **Apply Rules**: Click "Apply Rules" to categorize existing transactions
+4. **Import/Export Rules**: Share or backup rules in JSON, YAML, or CSV format
+
+**Importing Rules:**
+- Click **Import** button
+- Select a file (.json, .yaml, .yml, or .csv)
+- Sample files are available in the `samples/` directory
+
+**Exporting Rules:**
+- Click **Export** button
+- Choose format: json, yaml, or csv
+- File will download automatically
+
+See `samples/README.md` for detailed format documentation.
+
 ## File Structure
 
 ```
@@ -141,6 +162,11 @@ expense_tracker/
 │   └── static/
 │       ├── css/style.css    # Styling
 │       └── js/app.js        # Frontend logic
+├── samples/                 # Sample files for import
+│   ├── README.md            # Sample file documentation
+│   ├── categorization_rules_sample.json
+│   ├── categorization_rules_sample.yaml
+│   └── categorization_rules_sample.csv
 ├── start.bat               # Windows startup script
 ├── start.sh                # Mac/Linux startup script
 └── README.md               # This file

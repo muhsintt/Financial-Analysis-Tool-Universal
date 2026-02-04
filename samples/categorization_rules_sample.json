@@ -1,0 +1,70 @@
+{
+  "rules": [
+    {
+      "name": "Grocery Stores",
+      "keywords": "walmart,target,costco,safeway,kroger,whole foods,trader joe",
+      "category_name": "Groceries",
+      "category_type": "expense",
+      "priority": 10,
+      "is_active": true
+    },
+    {
+      "name": "Restaurants & Dining",
+      "keywords": "restaurant,mcdonald,starbucks,chipotle,subway,pizza,cafe,diner",
+      "category_name": "Dining Out",
+      "category_type": "expense",
+      "priority": 8,
+      "is_active": true
+    },
+    {
+      "name": "Gas Stations",
+      "keywords": "shell,chevron,exxon,bp,mobil,gas,fuel,petrol",
+      "category_name": "Transportation",
+      "category_type": "expense",
+      "priority": 9,
+      "is_active": true
+    },
+    {
+      "name": "Streaming Services",
+      "keywords": "netflix,hulu,spotify,disney+,amazon prime,youtube,apple tv",
+      "category_name": "Entertainment",
+      "category_type": "expense",
+      "priority": 7,
+      "is_active": true
+    },
+    {
+      "name": "Utilities",
+      "keywords": "electric,water,gas bill,internet,comcast,verizon,at&t,utility",
+      "category_name": "Utilities",
+      "category_type": "expense",
+      "priority": 6,
+      "is_active": true
+    },
+    {
+      "name": "Payroll Income",
+      "keywords": "payroll,salary,direct deposit,wages,paycheck",
+      "category_name": "Salary",
+      "category_type": "income",
+      "priority": 10,
+      "is_active": true
+    },
+    {
+      "name": "Bank Interest",
+      "keywords": "interest payment,interest earned,dividend",
+      "category_name": "Investment Income",
+      "category_type": "income",
+      "priority": 5,
+      "is_active": true
+    },
+    {
+      "name": "Bahá'í Fund Contributions",
+      "keywords": "bahai fund,huququllah,continental fund,national fund,local fund",
+      "category_name": "Contributions",
+      "category_type": "expense",
+      "priority": 8,
+      "is_active": true
+    }
+  ],
+  "description": "Sample categorization rules for the Financial Analysis Tool. These rules will automatically categorize transactions based on keyword matching.",
+  "note": "Categories that don't exist will be created automatically if category_type is provided."
+}

@@ -12,6 +12,7 @@ class Transaction(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
     is_excluded = db.Column(db.Boolean, default=False)
     source = db.Column(db.String(100), default='manual')  # 'manual' or 'upload'
+    upload_id = db.Column(db.Integer, db.ForeignKey('uploads.id'), nullable=True)  # Link to upload
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -35,6 +36,7 @@ class Transaction(db.Model):
             'category_name': category_name,
             'is_excluded': self.is_excluded,
             'source': self.source,
+            'upload_id': self.upload_id,
             'notes': self.notes,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()

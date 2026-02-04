@@ -2,6 +2,304 @@
 const API_URL = `${window.location.protocol}//${window.location.host}/api`;
 console.log('API_URL:', API_URL);
 
+// Helper function to escape HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Simple YAML Parser for categorization rules import
+function parseYAML(yamlText) {
+    const result = {};
+    let currentKey = null;
+    let currentArray = null;
+    let currentObject = null;
+    let inArray = false;
+    
+    const lines = yamlText.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        
+        // Skip empty lines and comments
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        
+        // Calculate indentation
+        const indent = line.search(/\S/);
+        
+        // Check for array item
+        if (trimmed.startsWith('- ')) {
+            const content = trimmed.substring(2).trim();
+            
+            // Start of new object in array
+            if (content.includes(':')) {
+                if (currentKey && !result[currentKey]) {
+                    result[currentKey] = [];
+                }
+                currentObject = {};
+                currentArray = result[currentKey];
+                
+                // Parse inline key-value
+                const colonIndex = content.indexOf(':');
+                const key = content.substring(0, colonIndex).trim();
+                let value = content.substring(colonIndex + 1).trim();
+                value = parseYAMLValue(value);
+                currentObject[key] = value;
+            } else {
+                // Simple array item
+                if (currentArray) {
+                    currentArray.push(parseYAMLValue(content));
+                }
+            }
+        } else if (trimmed.includes(':')) {
+            const colonIndex = trimmed.indexOf(':');
+            const key = trimmed.substring(0, colonIndex).trim();
+            let value = trimmed.substring(colonIndex + 1).trim();
+            
+            if (value === '' || value === '|' || value === '>') {
+                // This is a key for a nested object or array
+                if (indent === 0) {
+                    currentKey = key;
+                    result[currentKey] = [];
+                    currentArray = result[currentKey];
+                    inArray = true;
+                }
+            } else {
+                // Key-value pair
+                value = parseYAMLValue(value);
+                
+                if (currentObject && indent > 0) {
+                    currentObject[key] = value;
+                } else {
+                    result[key] = value;
+                }
+            }
+        }
+        
+        // Check if we need to push current object to array
+        if (currentObject && currentArray) {
+            const nextLine = lines[i + 1];
+            if (!nextLine || nextLine.trim().startsWith('- ') || nextLine.trim() === '' || nextLine.search(/\S/) === 0) {
+                if (Object.keys(currentObject).length > 0) {
+                    currentArray.push(currentObject);
+                    currentObject = null;
+                }
+            }
+        }
+    }
+    
+    // Push final object if exists
+    if (currentObject && currentArray && Object.keys(currentObject).length > 0) {
+        currentArray.push(currentObject);
+    }
+    
+    return result;
+}
+
+function parseYAMLValue(value) {
+    if (!value) return '';
+    
+    // Remove quotes
+    if ((value.startsWith('"') && value.endsWith('"')) || 
+        (value.startsWith("'") && value.endsWith("'"))) {
+        return value.slice(1, -1);
+    }
+    
+    // Parse booleans
+    if (value.toLowerCase() === 'true') return true;
+    if (value.toLowerCase() === 'false') return false;
+    
+    // Parse numbers
+    if (!isNaN(value) && value !== '') {
+        return Number(value);
+    }
+    
+    return value;
+}
+
+// Convert object to YAML string
+function toYAML(obj, indent = 0) {
+    let result = '';
+    const prefix = '  '.repeat(indent);
+    
+    if (Array.isArray(obj)) {
+        obj.forEach(item => {
+            if (typeof item === 'object' && item !== null) {
+                const keys = Object.keys(item);
+                keys.forEach((key, index) => {
+                    const value = item[key];
+                    if (index === 0) {
+                        result += `${prefix}- ${key}: ${formatYAMLValue(value)}\n`;
+                    } else {
+                        result += `${prefix}  ${key}: ${formatYAMLValue(value)}\n`;
+                    }
+                });
+                result += '\n';
+            } else {
+                result += `${prefix}- ${formatYAMLValue(item)}\n`;
+            }
+        });
+    } else if (typeof obj === 'object' && obj !== null) {
+        Object.keys(obj).forEach(key => {
+            const value = obj[key];
+            if (Array.isArray(value)) {
+                result += `${prefix}${key}:\n`;
+                result += toYAML(value, indent + 1);
+            } else if (typeof value === 'object' && value !== null) {
+                result += `${prefix}${key}:\n`;
+                result += toYAML(value, indent + 1);
+            } else {
+                result += `${prefix}${key}: ${formatYAMLValue(value)}\n`;
+            }
+        });
+    }
+    
+    return result;
+}
+
+function formatYAMLValue(value) {
+    if (typeof value === 'string') {
+        // Quote strings that contain special characters
+        if (value.includes(',') || value.includes(':') || value.includes('#') || 
+            value.includes('\n') || value.startsWith(' ') || value.endsWith(' ')) {
+            return `"${value.replace(/"/g, '\\"')}"`;
+        }
+        return value;
+    }
+    return String(value);
+}
+
+// Badí' (Bahá'í) Calendar Configuration
+const BADI_MONTHS = [
+    { number: 1, name: "Bahá", arabic: "بهاء", meaning: "Splendour" },
+    { number: 2, name: "Jalál", arabic: "جلال", meaning: "Glory" },
+    { number: 3, name: "Jamál", arabic: "جمال", meaning: "Beauty" },
+    { number: 4, name: "'Aẓamat", arabic: "عظمة", meaning: "Grandeur" },
+    { number: 5, name: "Núr", arabic: "نور", meaning: "Light" },
+    { number: 6, name: "Raḥmat", arabic: "رحمة", meaning: "Mercy" },
+    { number: 7, name: "Kalimát", arabic: "كلمات", meaning: "Words" },
+    { number: 8, name: "Kamál", arabic: "كمال", meaning: "Perfection" },
+    { number: 9, name: "Asmá'", arabic: "أسماء", meaning: "Names" },
+    { number: 10, name: "'Izzat", arabic: "عزة", meaning: "Might" },
+    { number: 11, name: "Mashíyyat", arabic: "مشية", meaning: "Will" },
+    { number: 12, name: "'Ilm", arabic: "علم", meaning: "Knowledge" },
+    { number: 13, name: "Qudrat", arabic: "قدرة", meaning: "Power" },
+    { number: 14, name: "Qawl", arabic: "قول", meaning: "Speech" },
+    { number: 15, name: "Masá'il", arabic: "مسائل", meaning: "Questions" },
+    { number: 16, name: "Sharaf", arabic: "شرف", meaning: "Honour" },
+    { number: 17, name: "Sulṭán", arabic: "سلطان", meaning: "Sovereignty" },
+    { number: 18, name: "Mulk", arabic: "ملك", meaning: "Dominion" },
+    { number: 0, name: "Ayyám-i-Há", arabic: "أيام الهاء", meaning: "Intercalary Days" },
+    { number: 19, name: "'Alá'", arabic: "علاء", meaning: "Loftiness" }
+];
+
+// Badí' Calendar Helper Functions
+function getNawRuz(gregorianYear) {
+    // Naw-Rúz falls on March 20 or 21 depending on the spring equinox
+    // From 2015 onwards, we use March 20 (simplified)
+    return new Date(gregorianYear, 2, gregorianYear >= 2015 ? 20 : 21);
+}
+
+function isLeapYearBadi(badiYear) {
+    // Check if the Badí' year is a leap year (5 Ayyám-i-Há days instead of 4)
+    const gregorianYear = badiYear + 1843;
+    const nextYear = gregorianYear + 1;
+    return (nextYear % 4 === 0 && nextYear % 100 !== 0) || (nextYear % 400 === 0);
+}
+
+function gregorianToBadi(gregorianDate) {
+    const date = new Date(gregorianDate);
+    
+    // Handle invalid dates
+    if (isNaN(date.getTime())) {
+        return { year: 0, month: 1, day: 1 };
+    }
+    
+    const nawRuzThisYear = getNawRuz(date.getFullYear());
+    
+    let badiYear, startOfYear;
+    if (date >= nawRuzThisYear) {
+        badiYear = date.getFullYear() - 1843;
+        startOfYear = nawRuzThisYear;
+    } else {
+        badiYear = date.getFullYear() - 1844;
+        startOfYear = getNawRuz(date.getFullYear() - 1);
+    }
+    
+    // Calculate day of the Badí' year (1-indexed)
+    const dayOfYear = Math.floor((date - startOfYear) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // Safety check for dayOfYear
+    if (dayOfYear < 1) {
+        return { year: badiYear, month: 1, day: 1 };
+    }
+    
+    let month, day;
+    if (dayOfYear <= 342) {  // First 18 months (18 * 19 = 342 days)
+        month = Math.floor((dayOfYear - 1) / 19) + 1;
+        day = ((dayOfYear - 1) % 19) + 1;
+    } else {
+        const ayyamDays = isLeapYearBadi(badiYear) ? 5 : 4;
+        if (dayOfYear <= 342 + ayyamDays) {
+            // Ayyám-i-Há
+            month = 0;
+            day = dayOfYear - 342;
+        } else {
+            // Month of 'Alá' (19th month)
+            month = 19;
+            day = dayOfYear - 342 - ayyamDays;
+        }
+    }
+    
+    return { year: badiYear, month: month, day: day };
+}
+
+function badiToGregorian(badiYear, badiMonth, badiDay) {
+    const gregorianYear = badiYear + 1843;
+    const nawRuz = getNawRuz(gregorianYear);
+    
+    let dayOfYear;
+    if (badiMonth >= 1 && badiMonth <= 18) {
+        dayOfYear = (badiMonth - 1) * 19 + badiDay;
+    } else if (badiMonth === 0) {
+        dayOfYear = 342 + badiDay;
+    } else if (badiMonth === 19) {
+        const ayyamDays = isLeapYearBadi(badiYear) ? 5 : 4;
+        dayOfYear = 342 + ayyamDays + badiDay;
+    } else {
+        throw new Error(`Invalid Badí' month: ${badiMonth}`);
+    }
+    
+    const result = new Date(nawRuz);
+    result.setDate(result.getDate() + dayOfYear - 1);
+    return result;
+}
+
+function getBadiMonthName(monthNumber) {
+    const month = BADI_MONTHS.find(m => m.number === monthNumber);
+    return month ? month.name : 'Unknown';
+}
+
+function formatBadiDate(badiYear, badiMonth, badiDay) {
+    const monthName = getBadiMonthName(badiMonth);
+    return `${badiDay} ${monthName} ${badiYear} BE`;
+}
+
+function getCurrentBadiDate() {
+    return gregorianToBadi(new Date());
+}
+
+function getGregorianYearFromBadi(badiYear, badiMonth) {
+    // Convert Badí' year and month to approximate Gregorian year
+    if (badiMonth >= 1 && badiMonth <= 18) {
+        return badiYear + 1843;
+    }
+    return badiYear + 1844;  // For 'Alá' and Ayyám-i-Há (in Feb/Mar of next Gregorian year)
+}
+
 // Fetch wrapper to always include credentials
 async function apiFetch(url, options = {}) {
     const defaultOptions = {
@@ -26,6 +324,9 @@ async function apiFetch(url, options = {}) {
 const state = {
     currentPage: 'dashboard',
     period: 'monthly',
+    calendarType: 'gregorian',  // 'gregorian' or 'badi'
+    badiYear: null,
+    badiMonth: null,
     transactions: [],
     categories: [],
     budgets: [],
@@ -190,6 +491,9 @@ async function initializeApp() {
     const month = String(today.getMonth() + 1).padStart(2, '0');
     document.getElementById('monthPicker').value = `${year}-${month}`;
     
+    // Initialize Badí' calendar selectors
+    initializeBadiCalendar();
+    
     console.log('Initializing event listeners...');
     initializeEventListeners();
     console.log('Initializing categories...');
@@ -197,6 +501,76 @@ async function initializeApp() {
     console.log('Loading dashboard...');
     await loadDashboard();
     console.log('Page initialized');
+}
+
+// Initialize Badí' Calendar UI
+function initializeBadiCalendar() {
+    const badiMonthPicker = document.getElementById('badiMonthPicker');
+    const badiYearPicker = document.getElementById('badiYearPicker');
+    
+    // Populate Badí' months (reorder to show chronologically)
+    const monthOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 0, 19];
+    badiMonthPicker.innerHTML = monthOrder.map(num => {
+        const month = BADI_MONTHS.find(m => m.number === num);
+        return `<option value="${month.number}">${month.name} (${month.meaning})</option>`;
+    }).join('');
+    
+    // Get current Badí' date
+    const currentBadi = getCurrentBadiDate();
+    state.badiYear = currentBadi.year;
+    state.badiMonth = currentBadi.month;
+    
+    // Populate Badí' years (5 years back to current year)
+    badiYearPicker.innerHTML = '';
+    for (let y = currentBadi.year - 5; y <= currentBadi.year; y++) {
+        const option = document.createElement('option');
+        option.value = y;
+        option.textContent = `${y} BE`;
+        badiYearPicker.appendChild(option);
+    }
+    
+    // Set current values
+    badiMonthPicker.value = currentBadi.month;
+    badiYearPicker.value = currentBadi.year;
+}
+
+// Toggle between Gregorian and Badí' calendar UI
+function toggleCalendarType(type) {
+    state.calendarType = type;
+    
+    const monthPicker = document.getElementById('monthPicker');
+    const badiMonthPicker = document.getElementById('badiMonthPicker');
+    const badiYearPicker = document.getElementById('badiYearPicker');
+    
+    if (type === 'badi') {
+        monthPicker.style.display = 'none';
+        badiMonthPicker.style.display = 'block';
+        badiYearPicker.style.display = 'block';
+    } else {
+        monthPicker.style.display = 'block';
+        badiMonthPicker.style.display = 'none';
+        badiYearPicker.style.display = 'none';
+    }
+    
+    // Don't auto-load - wait for Apply button
+}
+
+// Apply calendar settings and reload data
+function applyCalendarSettings() {
+    // Update state from UI
+    state.calendarType = document.getElementById('calendarTypeSelect').value;
+    state.period = document.getElementById('periodSelect').value;
+    
+    if (state.calendarType === 'badi') {
+        state.badiMonth = parseInt(document.getElementById('badiMonthPicker').value);
+        state.badiYear = parseInt(document.getElementById('badiYearPicker').value);
+    }
+    
+    // Reload dashboard with new settings
+    loadDashboard();
+    
+    // Show feedback
+    showNotification('Calendar settings applied', 'success');
 }
 
 // Event Listeners
@@ -226,11 +600,33 @@ function initializeEventListeners() {
     // Period selector
     document.getElementById('periodSelect').addEventListener('change', (e) => {
         state.period = e.target.value;
-        loadDashboard();
+        // Don't auto-load - wait for Apply button
     });
 
     document.getElementById('monthPicker').addEventListener('change', (e) => {
-        loadDashboard();
+        // Don't auto-load - wait for Apply button
+    });
+
+    // Calendar type selector
+    document.getElementById('calendarTypeSelect').addEventListener('change', (e) => {
+        toggleCalendarType(e.target.value);
+        // Don't auto-load - wait for Apply button
+    });
+
+    // Badí' calendar selectors
+    document.getElementById('badiMonthPicker').addEventListener('change', (e) => {
+        state.badiMonth = parseInt(e.target.value);
+        // Don't auto-load - wait for Apply button
+    });
+
+    document.getElementById('badiYearPicker').addEventListener('change', (e) => {
+        state.badiYear = parseInt(e.target.value);
+        // Don't auto-load - wait for Apply button
+    });
+
+    // Apply Calendar Button
+    document.getElementById('applyCalendarBtn').addEventListener('click', () => {
+        applyCalendarSettings();
     });
 
     // Transaction modal
@@ -346,6 +742,15 @@ function initializeEventListeners() {
         apiToggle.addEventListener('change', handleApiToggle);
     }
 
+    // Initialize Clear Transactions functionality
+    initializeClearTransactions();
+
+    // Initialize Upload History listeners
+    initializeUploadHistoryListeners();
+
+    // Initialize Activity Logs listeners
+    initializeActivityLogsListeners();
+
     // Filters
     document.getElementById('typeFilter').addEventListener('change', loadTransactions);
     document.getElementById('categoryFilter').addEventListener('change', loadTransactions);
@@ -455,6 +860,9 @@ function navigateTo(page) {
 
     // Load page content
     switch(page) {
+        case 'dashboard':
+            loadDashboard();
+            break;
         case 'transactions':
             loadTransactions();
             break;
@@ -470,9 +878,13 @@ function navigateTo(page) {
         case 'reports':
             loadReports();
             break;
+        case 'upload':
+            loadUploadHistory();
+            break;
         case 'settings':
             loadApiStatus();
             loadUsers();
+            loadActivityLogs();
             break;
     }
 }
@@ -960,13 +1372,33 @@ async function loadDashboard() {
         const period = state.period;
         const params = new URLSearchParams({ period, include_excluded: false });
         
-        // Add year and month if period is monthly
+        // Add calendar type
+        params.append('calendar', state.calendarType);
+        
+        // Add year and month based on calendar type
         if (period === 'monthly') {
-            const monthPicker = document.getElementById('monthPicker');
-            if (monthPicker && monthPicker.value) {
-                const [year, month] = monthPicker.value.split('-');
-                params.append('year', year);
-                params.append('month', month);
+            if (state.calendarType === 'badi') {
+                // Use Badí' year and month
+                params.append('year', state.badiYear);
+                params.append('month', state.badiMonth);
+            } else {
+                // Use Gregorian month picker
+                const monthPicker = document.getElementById('monthPicker');
+                if (monthPicker && monthPicker.value) {
+                    const [year, month] = monthPicker.value.split('-');
+                    params.append('year', year);
+                    params.append('month', month);
+                }
+            }
+        } else if (period === 'annual') {
+            if (state.calendarType === 'badi') {
+                params.append('year', state.badiYear);
+            } else {
+                const monthPicker = document.getElementById('monthPicker');
+                if (monthPicker && monthPicker.value) {
+                    const [year] = monthPicker.value.split('-');
+                    params.append('year', year);
+                }
             }
         }
         
@@ -1003,7 +1435,7 @@ async function loadDashboard() {
             <div class="transaction-item ${t.type}">
                 <div class="trans-info">
                     <div class="trans-desc">${t.description}</div>
-                    <div class="trans-cat">${t.category_name} • ${formatDate(t.date)}</div>
+                    <div class="trans-cat">${t.category_name} • ${formatDateWithCalendar(t.date)}</div>
                 </div>
                 <div class="trans-amount ${t.type}">
                     ${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
@@ -1156,7 +1588,7 @@ function displayTransactions(transactions) {
             <td class="checkbox-col">
                 <input type="checkbox" class="transaction-checkbox" value="${t.id}" onchange="updateBulkDeleteToolbar()">
             </td>
-            <td>${formatDate(t.date)}</td>
+            <td>${formatDateWithCalendar(t.date)}</td>
             <td>${t.description}</td>
             <td>${t.category_name}</td>
             <td><span class="tag ${t.type}">${t.type}</span></td>
@@ -1756,8 +2188,34 @@ async function loadReports() {
     try {
         const params = new URLSearchParams({
             period: state.period,
-            include_excluded: false
+            include_excluded: false,
+            calendar: state.calendarType
         });
+        
+        // Add year and month based on calendar type and period
+        if (state.period === 'monthly') {
+            if (state.calendarType === 'badi') {
+                params.append('year', state.badiYear);
+                params.append('month', state.badiMonth);
+            } else {
+                const monthPicker = document.getElementById('monthPicker');
+                if (monthPicker && monthPicker.value) {
+                    const [year, month] = monthPicker.value.split('-');
+                    params.append('year', year);
+                    params.append('month', month);
+                }
+            }
+        } else if (state.period === 'annual') {
+            if (state.calendarType === 'badi') {
+                params.append('year', state.badiYear);
+            } else {
+                const monthPicker = document.getElementById('monthPicker');
+                if (monthPicker && monthPicker.value) {
+                    const [year] = monthPicker.value.split('-');
+                    params.append('year', year);
+                }
+            }
+        }
 
         // Load trending data
         const trendingResponse = await apiFetch(`${API_URL}/reports/trending?months=6&type=expense`);
@@ -1918,6 +2376,11 @@ async function confirmUpload() {
 
     const formData = new FormData();
     formData.append('file', selectedFile);
+    
+    // Add uploaded_by from current user
+    if (state.currentUser) {
+        formData.append('uploaded_by', state.currentUser.username);
+    }
 
     try {
         const statusDiv = document.getElementById('uploadStatus');
@@ -1946,6 +2409,9 @@ async function confirmUpload() {
         document.getElementById('fileInput').value = '';
         selectedFile = null;
 
+        // Refresh upload history
+        loadUploadHistory();
+
         setTimeout(() => {
             navigateTo('transactions');
             loadTransactions();
@@ -1973,6 +2439,41 @@ function formatDate(dateStr) {
         month: 'short',
         day: 'numeric'
     });
+}
+
+// Format date based on current calendar selection
+function formatDateWithCalendar(dateStr) {
+    if (!dateStr) return '';
+    
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;  // Return original if invalid date
+        
+        if (state.calendarType === 'badi') {
+            const badi = gregorianToBadi(date);
+            return formatBadiDate(badi.year, badi.month, badi.day);
+        } else {
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return dateStr;
+    }
+}
+
+// Format date range for display
+function formatDateRange(startDateStr, endDateStr) {
+    if (state.calendarType === 'badi') {
+        const startBadi = gregorianToBadi(new Date(startDateStr));
+        const endBadi = gregorianToBadi(new Date(endDateStr));
+        return `${formatBadiDate(startBadi.year, startBadi.month, startBadi.day)} - ${formatBadiDate(endBadi.year, endBadi.month, endBadi.day)}`;
+    } else {
+        return `${formatDate(startDateStr)} - ${formatDate(endDateStr)}`;
+    }
 }
 
 function openModal(modalId) {
@@ -2184,12 +2685,13 @@ async function exportRules() {
         }
         
         // Ask user for format
-        const format = prompt('Export format: Enter "json" or "csv"', 'json');
+        const format = prompt('Export format: Enter "json", "yaml", or "csv"', 'json');
         if (!format) return;
         
         let content, filename, mimeType;
+        const formatLower = format.toLowerCase().trim();
         
-        if (format.toLowerCase() === 'csv') {
+        if (formatLower === 'csv') {
             // Convert to CSV
             const headers = ['name', 'keywords', 'category_name', 'category_type', 'priority', 'is_active'];
             const csvRows = [headers.join(',')];
@@ -2208,8 +2710,14 @@ async function exportRules() {
             content = csvRows.join('\n');
             filename = 'categorization_rules.csv';
             mimeType = 'text/csv';
+        } else if (formatLower === 'yaml' || formatLower === 'yml') {
+            // Convert to YAML
+            const yamlHeader = '# Categorization Rules Export\n# Generated: ' + new Date().toISOString() + '\n\n';
+            content = yamlHeader + toYAML(data);
+            filename = 'categorization_rules.yaml';
+            mimeType = 'text/yaml';
         } else {
-            // JSON format
+            // JSON format (default)
             content = JSON.stringify(data, null, 2);
             filename = 'categorization_rules.json';
             mimeType = 'application/json';
@@ -2241,8 +2749,9 @@ async function handleRulesImport(e) {
     try {
         const text = await file.text();
         let rules;
+        const fileName = file.name.toLowerCase();
         
-        if (file.name.endsWith('.csv')) {
+        if (fileName.endsWith('.csv')) {
             // Parse CSV
             const lines = text.split('\n').filter(line => line.trim());
             if (lines.length < 2) {
@@ -2266,8 +2775,17 @@ async function handleRulesImport(e) {
                 });
                 rules.push(rule);
             }
+        } else if (fileName.endsWith('.yaml') || fileName.endsWith('.yml')) {
+            // Parse YAML
+            const data = parseYAML(text);
+            rules = data.rules || data;
+            
+            // Ensure rules is an array
+            if (!Array.isArray(rules)) {
+                throw new Error('YAML file must contain a "rules" array');
+            }
         } else {
-            // Parse JSON
+            // Parse JSON (default)
             const data = JSON.parse(text);
             rules = data.rules || data;
         }
@@ -2731,4 +3249,697 @@ async function handleChangePassword(e) {
         errorDiv.textContent = 'Connection error. Please try again.';
         errorDiv.style.display = 'block';
     }
+}
+
+// Clear Transactions Functionality
+let pendingClearAction = null;
+
+function initializeClearTransactions() {
+    // Clear by Date
+    document.getElementById('clearByDateBtn')?.addEventListener('click', async () => {
+        const dateValue = document.getElementById('clearByDatePicker').value;
+        if (!dateValue) {
+            alert('Please select a date');
+            return;
+        }
+        await previewAndConfirmClear('date', { date: dateValue });
+    });
+    
+    // Clear by Period
+    document.getElementById('clearByPeriodBtn')?.addEventListener('click', async () => {
+        const startDate = document.getElementById('clearPeriodStart').value;
+        const endDate = document.getElementById('clearPeriodEnd').value;
+        
+        if (!startDate || !endDate) {
+            alert('Please select both start and end dates');
+            return;
+        }
+        
+        if (startDate > endDate) {
+            alert('Start date must be before or equal to end date');
+            return;
+        }
+        
+        await previewAndConfirmClear('period', { start_date: startDate, end_date: endDate });
+    });
+    
+    // Clear All
+    document.getElementById('clearAllBtn')?.addEventListener('click', async () => {
+        await previewAndConfirmClear('all', {});
+    });
+    
+    // Confirm Clear Button
+    document.getElementById('confirmClearBtn')?.addEventListener('click', async () => {
+        if (pendingClearAction) {
+            await executeClear(pendingClearAction.type, pendingClearAction.params);
+        }
+    });
+}
+
+async function previewAndConfirmClear(type, params) {
+    try {
+        const queryParams = new URLSearchParams({ type, ...params });
+        const response = await apiFetch(`${API_URL}/transactions/clear/preview?${queryParams}`);
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to preview transactions');
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (data.count === 0) {
+            alert('No transactions found for the selected criteria');
+            return;
+        }
+        
+        // Set pending action
+        pendingClearAction = { type, params };
+        
+        // Update modal message
+        let message = '';
+        if (type === 'all') {
+            message = 'Are you sure you want to delete ALL transactions?';
+        } else if (type === 'date') {
+            message = `Are you sure you want to delete all transactions from ${formatDateWithCalendar(params.date)}?`;
+        } else if (type === 'period') {
+            message = `Are you sure you want to delete all transactions from ${formatDateWithCalendar(params.start_date)} to ${formatDateWithCalendar(params.end_date)}?`;
+        }
+        
+        document.getElementById('clearTransactionsMessage').textContent = message;
+        document.getElementById('clearTransactionsCount').textContent = data.count;
+        
+        openModal('clearTransactionsModal');
+    } catch (error) {
+        console.error('Error previewing clear:', error);
+        alert('Error previewing transactions to delete');
+    }
+}
+
+async function executeClear(type, params) {
+    try {
+        let url;
+        if (type === 'all') {
+            url = `${API_URL}/transactions/clear/all`;
+        } else if (type === 'date') {
+            url = `${API_URL}/transactions/clear/by-date?date=${params.date}`;
+        } else if (type === 'period') {
+            url = `${API_URL}/transactions/clear/by-period?start_date=${params.start_date}&end_date=${params.end_date}`;
+        }
+        
+        const response = await apiFetch(url, { method: 'DELETE' });
+        const data = await response.json();
+        
+        if (!response.ok) {
+            alert(data.error || 'Failed to delete transactions');
+            return;
+        }
+        
+        closeModal('clearTransactionsModal');
+        pendingClearAction = null;
+        
+        // Clear form inputs
+        document.getElementById('clearByDatePicker').value = '';
+        document.getElementById('clearPeriodStart').value = '';
+        document.getElementById('clearPeriodEnd').value = '';
+        
+        alert(`Successfully deleted ${data.deleted_count} transaction(s)`);
+        
+        // Reload transactions if on transactions page
+        if (state.currentPage === 'transactions') {
+            loadTransactions();
+        } else if (state.currentPage === 'dashboard') {
+            loadDashboard();
+        }
+    } catch (error) {
+        console.error('Error clearing transactions:', error);
+        alert('Error deleting transactions');
+    }
+}
+
+// Upload History Management
+let pendingUploadDelete = null;
+
+async function loadUploadHistory() {
+    try {
+        const response = await apiFetch(`${API_URL}/uploads/`);
+        if (!response.ok) throw new Error('Failed to load upload history');
+        
+        const uploads = await response.json();
+        displayUploadHistory(uploads);
+    } catch (error) {
+        console.error('Error loading upload history:', error);
+    }
+}
+
+function displayUploadHistory(uploads) {
+    const tbody = document.getElementById('uploadHistoryBody');
+    const noDataMsg = document.getElementById('noUploadsMessage');
+    
+    if (!uploads || uploads.length === 0) {
+        tbody.innerHTML = '';
+        noDataMsg.style.display = 'block';
+        return;
+    }
+    
+    noDataMsg.style.display = 'none';
+    
+    tbody.innerHTML = uploads.map(u => `
+        <tr data-upload-id="${u.id}">
+            <td class="checkbox-col">
+                <input type="checkbox" class="upload-checkbox" value="${u.id}" onchange="updateUploadBulkActions()">
+            </td>
+            <td title="${u.original_filename}">${truncateFilename(u.original_filename, 30)}</td>
+            <td><span class="file-type ${u.file_type}">${u.file_type.toUpperCase()}</span></td>
+            <td>${u.file_size_formatted}</td>
+            <td><strong>${u.transaction_count}</strong></td>
+            <td>${u.uploaded_by}</td>
+            <td>${formatDateWithCalendar(u.created_at)}</td>
+            <td><span class="status-badge ${u.status}">${u.status}</span></td>
+            <td>
+                <div class="actions">
+                    <button class="btn-icon" title="Download CSV" onclick="downloadUpload(${u.id})">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button class="btn-icon delete" title="Delete" onclick="confirmDeleteUpload(${u.id}, ${u.transaction_count})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function truncateFilename(filename, maxLength) {
+    if (filename.length <= maxLength) return filename;
+    const ext = filename.split('.').pop();
+    const name = filename.slice(0, -(ext.length + 1));
+    const truncatedName = name.slice(0, maxLength - ext.length - 4) + '...';
+    return `${truncatedName}.${ext}`;
+}
+
+async function downloadUpload(uploadId) {
+    try {
+        const response = await apiFetch(`${API_URL}/uploads/${uploadId}/download`);
+        if (!response.ok) throw new Error('Failed to download');
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `upload_${uploadId}_transactions.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    } catch (error) {
+        console.error('Error downloading upload:', error);
+        alert('Error downloading file');
+    }
+}
+
+function confirmDeleteUpload(uploadId, transactionCount) {
+    pendingUploadDelete = { uploadId, transactionCount };
+    document.getElementById('deleteUploadTransactionCount').textContent = transactionCount;
+    document.getElementById('deleteUploadMessage').textContent = 
+        `Are you sure you want to delete this upload and all ${transactionCount} associated transaction(s)?`;
+    openModal('deleteUploadModal');
+}
+
+async function executeDeleteUpload() {
+    if (!pendingUploadDelete) return;
+    
+    const { uploadId } = pendingUploadDelete;
+    
+    try {
+        const response = await apiFetch(`${API_URL}/uploads/${uploadId}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            alert(data.error || 'Failed to delete upload');
+            return;
+        }
+        
+        closeModal('deleteUploadModal');
+        pendingUploadDelete = null;
+        
+        alert(`Successfully deleted upload and ${data.deleted_transactions} transaction(s)`);
+        loadUploadHistory();
+    } catch (error) {
+        console.error('Error deleting upload:', error);
+        alert('Error deleting upload');
+    }
+}
+
+function updateUploadBulkActions() {
+    const checkboxes = document.querySelectorAll('.upload-checkbox:checked');
+    const bulkActions = document.getElementById('bulkUploadActions');
+    const countSpan = document.getElementById('selectedUploadCount');
+    
+    if (checkboxes.length > 0) {
+        bulkActions.style.display = 'flex';
+        countSpan.textContent = `${checkboxes.length} selected`;
+    } else {
+        bulkActions.style.display = 'none';
+    }
+}
+
+async function deleteSelectedUploads() {
+    const checkboxes = document.querySelectorAll('.upload-checkbox:checked');
+    const uploadIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if (uploadIds.length === 0) return;
+    
+    if (!confirm(`Are you sure you want to delete ${uploadIds.length} upload(s) and all their transactions? This cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        let deletedCount = 0;
+        let transactionCount = 0;
+        
+        for (const uploadId of uploadIds) {
+            const response = await apiFetch(`${API_URL}/uploads/${uploadId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                deletedCount++;
+                transactionCount += data.deleted_transactions;
+            }
+        }
+        
+        alert(`Successfully deleted ${deletedCount} upload(s) and ${transactionCount} transaction(s)`);
+        loadUploadHistory();
+    } catch (error) {
+        console.error('Error deleting uploads:', error);
+        alert('Error deleting uploads');
+    }
+}
+
+function initializeUploadHistoryListeners() {
+    // Refresh button
+    document.getElementById('refreshUploadsBtn')?.addEventListener('click', loadUploadHistory);
+    
+    // Select all checkbox
+    document.getElementById('selectAllUploads')?.addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.upload-checkbox');
+        checkboxes.forEach(cb => cb.checked = e.target.checked);
+        updateUploadBulkActions();
+    });
+    
+    // Delete selected button
+    document.getElementById('deleteSelectedUploadsBtn')?.addEventListener('click', deleteSelectedUploads);
+    
+    // Confirm delete upload button
+    document.getElementById('confirmDeleteUploadBtn')?.addEventListener('click', executeDeleteUpload);
+}
+
+// ==================== Activity Logs ==================== //
+
+let activityLogsPage = 1;
+const activityLogsPerPage = 50;
+
+async function loadActivityLogs() {
+    const tbody = document.getElementById('activityLogsBody');
+    if (!tbody) return;
+    
+    const categoryFilter = document.getElementById('activityCategoryFilter')?.value || '';
+    const actionFilter = document.getElementById('activityActionFilter')?.value || '';
+    const dateFilter = document.getElementById('activityDateFilter')?.value || '';
+    
+    try {
+        let url = `/api/activity/?page=${activityLogsPage}&per_page=${activityLogsPerPage}`;
+        if (categoryFilter) url += `&category=${categoryFilter}`;
+        if (actionFilter) url += `&action=${actionFilter}`;
+        if (dateFilter) {
+            url += `&start_date=${dateFilter}&end_date=${dateFilter}`;
+        }
+        
+        const response = await fetch(url, { credentials: 'include' });
+        const data = await response.json();
+        
+        tbody.innerHTML = '';
+        
+        if (data.activities && data.activities.length > 0) {
+            data.activities.forEach(log => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="time-cell">
+                        ${formatDateTime(log.created_at)}
+                        <span class="time-ago">${log.time_ago}</span>
+                    </td>
+                    <td class="user-cell">${escapeHtml(log.username)}</td>
+                    <td><span class="action-badge ${log.action}">${log.action.replace('_', ' ')}</span></td>
+                    <td><span class="category-badge">${log.category}</span></td>
+                    <td class="description-cell" title="${escapeHtml(log.description)}">${escapeHtml(log.description)}</td>
+                    <td class="ip-cell">${log.ip_address || '-'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        } else {
+            tbody.innerHTML = `
+                <tr class="empty-row">
+                    <td colspan="6">
+                        <i class="fas fa-clipboard-list" style="font-size: 40px; color: #ddd; margin-bottom: 15px;"></i>
+                        <p>No activity logs found</p>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        // Update pagination
+        updateActivityPagination(data);
+        
+    } catch (error) {
+        console.error('Error loading activity logs:', error);
+        tbody.innerHTML = `
+            <tr class="empty-row">
+                <td colspan="6">
+                    <i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i>
+                    <p>Error loading activity logs</p>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function formatDateTime(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function updateActivityPagination(data) {
+    const prevBtn = document.getElementById('activityPrevPage');
+    const nextBtn = document.getElementById('activityNextPage');
+    const pageInfo = document.getElementById('activityPageInfo');
+    
+    if (prevBtn) prevBtn.disabled = activityLogsPage <= 1;
+    if (nextBtn) nextBtn.disabled = activityLogsPage >= data.pages;
+    if (pageInfo) pageInfo.textContent = `Page ${data.page} of ${data.pages || 1}`;
+}
+
+async function clearOldActivityLogs() {
+    const retentionDays = currentLogSettings?.retention_days || parseInt(document.getElementById('retentionDays')?.value) || 90;
+    
+    if (!confirm(`Are you sure you want to delete activity logs older than ${retentionDays} days?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/activity/clear?days=${retentionDays}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`Deleted ${data.deleted_count} old log entries`, 'success');
+            loadActivityLogs();
+        } else {
+            showNotification(data.error || 'Failed to clear logs', 'error');
+        }
+    } catch (error) {
+        console.error('Error clearing logs:', error);
+        showNotification('Error clearing logs', 'error');
+    }
+}
+
+function initializeActivityLogsListeners() {
+    // Filter change handlers
+    document.getElementById('activityCategoryFilter')?.addEventListener('change', () => {
+        activityLogsPage = 1;
+        loadActivityLogs();
+    });
+    
+    document.getElementById('activityActionFilter')?.addEventListener('change', () => {
+        activityLogsPage = 1;
+        loadActivityLogs();
+    });
+    
+    document.getElementById('activityDateFilter')?.addEventListener('change', () => {
+        activityLogsPage = 1;
+        loadActivityLogs();
+    });
+    
+    // Refresh button
+    document.getElementById('refreshActivityLogsBtn')?.addEventListener('click', loadActivityLogs);
+    
+    // Pagination
+    document.getElementById('activityPrevPage')?.addEventListener('click', () => {
+        if (activityLogsPage > 1) {
+            activityLogsPage--;
+            loadActivityLogs();
+        }
+    });
+    
+    document.getElementById('activityNextPage')?.addEventListener('click', () => {
+        activityLogsPage++;
+        loadActivityLogs();
+    });
+    
+    // Clear old logs
+    document.getElementById('clearOldLogsBtn')?.addEventListener('click', clearOldActivityLogs);
+    
+    // Initialize log settings listeners
+    initializeLogSettingsListeners();
+}
+
+// ==================== Log Settings ==================== //
+
+let currentLogSettings = null;
+
+async function loadLogSettings() {
+    try {
+        const response = await fetch('/api/activity/settings', { credentials: 'include' });
+        if (response.ok) {
+            currentLogSettings = await response.json();
+            populateLogSettingsUI(currentLogSettings);
+        }
+    } catch (error) {
+        console.error('Error loading log settings:', error);
+    }
+}
+
+function populateLogSettingsUI(settings) {
+    // Master toggle
+    const loggingToggle = document.getElementById('loggingEnabledToggle');
+    if (loggingToggle) {
+        loggingToggle.checked = settings.logging_enabled;
+        updateLogSettingsVisibility(settings.logging_enabled);
+    }
+    
+    // Category checkboxes
+    const categoryCheckboxes = document.querySelectorAll('#categoryCheckboxes input[type="checkbox"]');
+    categoryCheckboxes.forEach(cb => {
+        cb.checked = settings.enabled_categories.includes(cb.value);
+    });
+    
+    // Action checkboxes
+    const actionCheckboxes = document.querySelectorAll('#actionCheckboxes input[type="checkbox"]');
+    actionCheckboxes.forEach(cb => {
+        cb.checked = settings.enabled_actions.includes(cb.value);
+    });
+    
+    // Retention settings
+    const retentionDays = document.getElementById('retentionDays');
+    if (retentionDays) retentionDays.value = settings.retention_days;
+    
+    const autoCleanup = document.getElementById('autoCleanupToggle');
+    if (autoCleanup) autoCleanup.checked = settings.auto_cleanup;
+    
+    // Export format
+    const exportFormat = document.getElementById('exportFormat');
+    if (exportFormat) exportFormat.value = settings.export_format;
+    
+    // File logging settings
+    const fileLoggingToggle = document.getElementById('fileLoggingToggle');
+    if (fileLoggingToggle) {
+        fileLoggingToggle.checked = settings.file_logging_enabled;
+        toggleFileDestinationSettings(settings.file_logging_enabled);
+    }
+    
+    // Destination type
+    const destinationType = document.getElementById('destinationType');
+    if (destinationType) {
+        destinationType.value = settings.log_destination_type;
+        updateDestinationConfig(settings.log_destination_type);
+    }
+    
+    // Local path
+    const localLogPath = document.getElementById('localLogPath');
+    if (localLogPath) localLogPath.value = settings.log_path || '';
+    
+    // SMB settings
+    document.getElementById('smbServer')?.setAttribute('value', settings.smb_server || '');
+    document.getElementById('smbShare')?.setAttribute('value', settings.smb_share || '');
+    document.getElementById('smbDomain')?.setAttribute('value', settings.smb_domain || '');
+    document.getElementById('smbUsername')?.setAttribute('value', settings.smb_username || '');
+    
+    // NFS settings
+    document.getElementById('nfsServer')?.setAttribute('value', settings.nfs_server || '');
+    document.getElementById('nfsExport')?.setAttribute('value', settings.nfs_export || '');
+    document.getElementById('nfsMountOptions')?.setAttribute('value', settings.nfs_mount_options || '');
+}
+
+function updateLogSettingsVisibility(enabled) {
+    const settingsGroup = document.getElementById('logSettingsGroup');
+    if (settingsGroup) {
+        if (enabled) {
+            settingsGroup.classList.remove('disabled');
+        } else {
+            settingsGroup.classList.add('disabled');
+        }
+    }
+}
+
+function toggleFileDestinationSettings(show) {
+    const settings = document.getElementById('fileDestinationSettings');
+    if (settings) {
+        settings.style.display = show ? 'block' : 'none';
+    }
+}
+
+function updateDestinationConfig(type) {
+    document.getElementById('localPathConfig').style.display = type === 'local' ? 'block' : 'none';
+    document.getElementById('smbConfig').style.display = type === 'smb' ? 'block' : 'none';
+    document.getElementById('nfsConfig').style.display = type === 'nfs' ? 'block' : 'none';
+}
+
+async function saveLogSettings() {
+    const settings = {
+        logging_enabled: document.getElementById('loggingEnabledToggle')?.checked || false,
+        enabled_categories: Array.from(document.querySelectorAll('#categoryCheckboxes input:checked')).map(cb => cb.value),
+        enabled_actions: Array.from(document.querySelectorAll('#actionCheckboxes input:checked')).map(cb => cb.value),
+        retention_days: parseInt(document.getElementById('retentionDays')?.value) || 90,
+        auto_cleanup: document.getElementById('autoCleanupToggle')?.checked || false,
+        export_format: document.getElementById('exportFormat')?.value || 'csv',
+        file_logging_enabled: document.getElementById('fileLoggingToggle')?.checked || false,
+        log_destination_type: document.getElementById('destinationType')?.value || 'local',
+        log_path: document.getElementById('localLogPath')?.value || '',
+        smb_server: document.getElementById('smbServer')?.value || '',
+        smb_share: document.getElementById('smbShare')?.value || '',
+        smb_domain: document.getElementById('smbDomain')?.value || '',
+        smb_username: document.getElementById('smbUsername')?.value || '',
+        smb_password: document.getElementById('smbPassword')?.value || '',
+        nfs_server: document.getElementById('nfsServer')?.value || '',
+        nfs_export: document.getElementById('nfsExport')?.value || '',
+        nfs_mount_options: document.getElementById('nfsMountOptions')?.value || ''
+    };
+    
+    try {
+        const response = await fetch('/api/activity/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings),
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification('Log settings saved successfully', 'success');
+            currentLogSettings = data.settings;
+        } else {
+            showNotification(data.error || 'Failed to save settings', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving log settings:', error);
+        showNotification('Error saving settings', 'error');
+    }
+}
+
+async function exportLogs() {
+    const format = document.getElementById('exportFormat')?.value || 'csv';
+    const category = document.getElementById('activityCategoryFilter')?.value || '';
+    const action = document.getElementById('activityActionFilter')?.value || '';
+    const date = document.getElementById('activityDateFilter')?.value || '';
+    
+    let url = `/api/activity/export?format=${format}`;
+    if (category) url += `&category=${category}`;
+    if (action) url += `&action=${action}`;
+    if (date) url += `&start_date=${date}&end_date=${date}`;
+    
+    try {
+        window.location.href = url;
+        showNotification('Exporting logs...', 'success');
+    } catch (error) {
+        showNotification('Failed to export logs', 'error');
+    }
+}
+
+async function testLogDestination() {
+    try {
+        const response = await fetch('/api/activity/test-destination', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+        } else {
+            showNotification(data.error || data.message || 'Connection test failed', 'error');
+        }
+    } catch (error) {
+        showNotification('Error testing destination', 'error');
+    }
+}
+
+async function saveLogsToFile() {
+    try {
+        const response = await fetch('/api/activity/save-to-file', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(data.message, 'success');
+        } else {
+            showNotification(data.error || 'Failed to save logs', 'error');
+        }
+    } catch (error) {
+        showNotification('Error saving logs to file', 'error');
+    }
+}
+
+function initializeLogSettingsListeners() {
+    // Master toggle
+    document.getElementById('loggingEnabledToggle')?.addEventListener('change', (e) => {
+        updateLogSettingsVisibility(e.target.checked);
+    });
+    
+    // File logging toggle
+    document.getElementById('fileLoggingToggle')?.addEventListener('change', (e) => {
+        toggleFileDestinationSettings(e.target.checked);
+    });
+    
+    // Destination type change
+    document.getElementById('destinationType')?.addEventListener('change', (e) => {
+        updateDestinationConfig(e.target.value);
+    });
+    
+    // Save settings button
+    document.getElementById('saveLogSettingsBtn')?.addEventListener('click', saveLogSettings);
+    
+    // Export logs button
+    document.getElementById('exportLogsBtn')?.addEventListener('click', exportLogs);
+    
+    // Test destination button
+    document.getElementById('testDestinationBtn')?.addEventListener('click', testLogDestination);
+    
+    // Save logs to file button
+    document.getElementById('saveLogsToFileBtn')?.addEventListener('click', saveLogsToFile);
+    
+    // Load settings on init
+    loadLogSettings();
 }
