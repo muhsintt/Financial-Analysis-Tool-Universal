@@ -1536,3 +1536,305 @@ input:checked + .slider:before {
         padding: 10px;
     }
 }
+
+/* Login Screen */
+.login-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, var(--secondary) 0%, var(--dark) 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.login-container {
+    background: white;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 400px;
+    animation: slideUp 0.5s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-header i {
+    font-size: 50px;
+    color: var(--primary);
+    margin-bottom: 15px;
+}
+
+.login-header h1 {
+    color: var(--secondary);
+    margin-bottom: 5px;
+}
+
+.login-header p {
+    color: #888;
+    font-size: 14px;
+}
+
+.login-form .form-group {
+    margin-bottom: 20px;
+}
+
+.login-form label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--dark);
+    font-weight: 500;
+}
+
+.login-form .form-control {
+    width: 100%;
+    padding: 12px 15px;
+    font-size: 16px;
+}
+
+.login-error {
+    background: #fee;
+    color: var(--danger);
+    padding: 10px 15px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    font-size: 14px;
+    border-left: 3px solid var(--danger);
+}
+
+.btn-login {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    margin-top: 10px;
+}
+
+.login-footer {
+    text-align: center;
+    margin-top: 20px;
+    color: #999;
+}
+
+/* User Menu */
+.user-menu {
+    position: relative;
+}
+
+.btn-user {
+    background: transparent;
+    border: 1px solid #ddd;
+    padding: 8px 15px;
+    border-radius: 25px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--dark);
+    transition: all 0.3s ease;
+}
+
+.btn-user:hover {
+    background: #f5f5f5;
+    border-color: var(--primary);
+}
+
+.btn-user i:first-child {
+    font-size: 20px;
+    color: var(--primary);
+}
+
+.user-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);
+    min-width: 200px;
+    padding: 15px;
+    display: none;
+    z-index: 1000;
+    margin-top: 10px;
+}
+
+.user-dropdown.show {
+    display: block;
+    animation: fadeIn 0.2s ease;
+}
+
+.user-dropdown .user-info {
+    padding-bottom: 10px;
+}
+
+.user-dropdown .user-info span {
+    display: block;
+}
+
+.user-dropdown .user-info #dropdownUsername {
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 5px;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 15px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.role-badge.superuser {
+    background: #e8f5e9;
+    color: var(--success);
+}
+
+.role-badge.standard {
+    background: #e3f2fd;
+    color: var(--primary);
+}
+
+.user-dropdown hr {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 10px 0;
+}
+
+.user-dropdown a {
+    display: block;
+    padding: 10px;
+    color: var(--dark);
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background 0.2s;
+}
+
+.user-dropdown a:hover {
+    background: #f5f5f5;
+}
+
+.user-dropdown a i {
+    margin-right: 10px;
+    width: 16px;
+}
+
+/* User Management */
+.user-management-card {
+    background: white;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.user-management-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.user-management-header h3 {
+    color: var(--dark);
+}
+
+.users-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.users-table th,
+.users-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.users-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: var(--dark);
+}
+
+.users-table tr:hover {
+    background: #f8f9fa;
+}
+
+.users-table .role-cell .role-badge {
+    font-size: 12px;
+}
+
+.users-table .actions-cell {
+    display: flex;
+    gap: 10px;
+}
+
+.users-table .default-badge {
+    background: #fff3e0;
+    color: var(--warning);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    margin-left: 8px;
+}
+
+/* Read-only mode indicator */
+.read-only-banner {
+    background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+    color: #e65100;
+    padding: 10px 20px;
+    text-align: center;
+    font-size: 14px;
+    display: none;
+}
+
+.read-only-banner.show {
+    display: block;
+}
+
+.read-only-banner i {
+    margin-right: 8px;
+}
+
+/* Hide buttons for read-only users */
+body.read-only .btn-primary,
+body.read-only .btn-success,
+body.read-only .btn-danger,
+body.read-only .btn-warning,
+body.read-only #addTransBtn,
+body.read-only #addBudgetBtn,
+body.read-only #addCategoryPageBtn,
+body.read-only #addRuleBtn,
+body.read-only #applyRulesBtn,
+body.read-only #confirmUploadBtn,
+body.read-only .btn-icon.edit,
+body.read-only .btn-icon.delete,
+body.read-only #userManagementSection {
+    display: none !important;
+}
+
+body.read-only .upload-area,
+body.read-only .toggle-section {
+    pointer-events: none;
+    opacity: 0.5;
+}
+

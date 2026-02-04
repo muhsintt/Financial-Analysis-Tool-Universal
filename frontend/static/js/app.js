@@ -2,6 +2,26 @@
 const API_URL = `${window.location.protocol}//${window.location.host}/api`;
 console.log('API_URL:', API_URL);
 
+// Fetch wrapper to always include credentials
+async function apiFetch(url, options = {}) {
+    const defaultOptions = {
+        credentials: 'include'
+    };
+    
+    const response = await fetch(url, { ...defaultOptions, ...options });
+    
+    // Handle authentication errors
+    if (response.status === 401) {
+        // Session expired, redirect to login
+        state.isAuthenticated = false;
+        state.currentUser = null;
+        showLoginScreen();
+        throw new Error('Session expired. Please login again.');
+    }
+    
+    return response;
+}
+
 // State Management
 const state = {
     currentPage: 'dashboard',
@@ -18,12 +38,152 @@ const state = {
     sortConfig: {
         field: 'date',
         direction: 'desc'
-    }
+    },
+    currentUser: null,
+    isAuthenticated: false
 };
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOMContentLoaded event fired');
+    
+    // Check authentication first
+    await checkAuth();
+    
+    if (!state.isAuthenticated) {
+        showLoginScreen();
+        initializeLoginListeners();
+        return;
+    }
+    
+    // User is authenticated, show main app
+    showMainApp();
+});
+
+// Authentication Functions
+async function checkAuth() {
+    try {
+        const response = await fetch(`${API_URL}/auth/me`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.authenticated) {
+                state.isAuthenticated = true;
+                state.currentUser = data.user;
+                return true;
+            }
+        }
+        
+        state.isAuthenticated = false;
+        state.currentUser = null;
+        return false;
+    } catch (error) {
+        console.error('Auth check failed:', error);
+        state.isAuthenticated = false;
+        state.currentUser = null;
+        return false;
+    }
+}
+
+function showLoginScreen() {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('mainApp').style.display = 'none';
+}
+
+function showMainApp() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'flex';
+    
+    // Update user display
+    updateUserDisplay();
+    
+    // Apply read-only mode if standard user
+    if (state.currentUser && state.currentUser.role === 'standard') {
+        document.body.classList.add('read-only');
+    } else {
+        document.body.classList.remove('read-only');
+    }
+    
+    // Initialize the rest of the app
+    initializeApp();
+}
+
+function updateUserDisplay() {
+    if (state.currentUser) {
+        document.getElementById('currentUserDisplay').textContent = state.currentUser.username;
+        document.getElementById('dropdownUsername').textContent = state.currentUser.username;
+        
+        const roleBadge = document.getElementById('dropdownRole');
+        roleBadge.textContent = state.currentUser.role === 'superuser' ? 'Super User' : 'Standard';
+        roleBadge.className = 'role-badge ' + state.currentUser.role;
+    }
+}
+
+function initializeLoginListeners() {
+    const loginForm = document.getElementById('loginForm');
+    loginForm.addEventListener('submit', handleLogin);
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errorDiv = document.getElementById('loginError');
+    
+    errorDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            errorDiv.textContent = data.error || 'Login failed';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        state.isAuthenticated = true;
+        state.currentUser = data.user;
+        showMainApp();
+        
+    } catch (error) {
+        console.error('Login error:', error);
+        errorDiv.textContent = 'Connection error. Please try again.';
+        errorDiv.style.display = 'block';
+    }
+}
+
+async function handleLogout() {
+    try {
+        await fetch(`${API_URL}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+    } catch (error) {
+        console.error('Logout error:', error);
+    }
+    
+    state.isAuthenticated = false;
+    state.currentUser = null;
+    document.body.classList.remove('read-only');
+    showLoginScreen();
+    
+    // Clear form
+    document.getElementById('loginUsername').value = '';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('loginError').style.display = 'none';
+}
+
+async function initializeApp() {
     // Initialize month picker with current month
     const today = new Date();
     const year = today.getFullYear();
@@ -37,7 +197,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('Loading dashboard...');
     await loadDashboard();
     console.log('Page initialized');
-});
+}
 
 // Event Listeners
 function initializeEventListeners() {
@@ -124,6 +284,61 @@ function initializeEventListeners() {
         document.getElementById('importRulesFile').click();
     });
     document.getElementById('importRulesFile').addEventListener('change', handleRulesImport);
+
+    // User Menu
+    const userMenuBtn = document.getElementById('userMenuBtn');
+    const userDropdown = document.getElementById('userDropdown');
+    
+    if (userMenuBtn) {
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('show');
+        });
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+        if (userDropdown) userDropdown.classList.remove('show');
+    });
+    
+    // Logout
+    const logoutLink = document.getElementById('logoutLink');
+    if (logoutLink) {
+        logoutLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            handleLogout();
+        });
+    }
+    
+    // Change Password
+    const changePasswordLink = document.getElementById('changePasswordLink');
+    if (changePasswordLink) {
+        changePasswordLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            userDropdown.classList.remove('show');
+            openModal('changePasswordModal');
+        });
+    }
+    
+    // Change Password Form
+    const changePasswordForm = document.getElementById('changePasswordForm');
+    if (changePasswordForm) {
+        changePasswordForm.addEventListener('submit', handleChangePassword);
+    }
+    
+    // Add User Button (in settings)
+    const addUserBtn = document.getElementById('addUserBtn');
+    if (addUserBtn) {
+        addUserBtn.addEventListener('click', () => {
+            openUserModal();
+        });
+    }
+    
+    // User Form
+    const userForm = document.getElementById('userForm');
+    if (userForm) {
+        userForm.addEventListener('submit', handleUserSubmit);
+    }
 
     // API Status Toggle
     const apiToggle = document.getElementById('apiToggle');
@@ -257,6 +472,7 @@ function navigateTo(page) {
             break;
         case 'settings':
             loadApiStatus();
+            loadUsers();
             break;
     }
 }
@@ -264,8 +480,9 @@ function navigateTo(page) {
 // Initialize Categories
 async function initializeCategories() {
     try {
-        const response = await fetch(`${API_URL}/categories/init`, {
-            method: 'POST'
+        const response = await apiFetch(`${API_URL}/categories/init`, {
+            method: 'POST',
+            credentials: 'include'
         });
         
         if (!response.ok) throw new Error('Failed to initialize categories');
@@ -279,7 +496,9 @@ async function initializeCategories() {
 // Load Categories
 async function loadCategories() {
     try {
-        const response = await fetch(`${API_URL}/categories/?include_subcategories=true`);
+        const response = await apiFetch(`${API_URL}/categories/?include_subcategories=true`, {
+            credentials: 'include'
+        });
         if (!response.ok) throw new Error('Failed to load categories');
         
         const allCategories = await response.json();
@@ -331,7 +550,7 @@ async function loadCategories() {
 // Load Category Management (for Categories page)
 async function loadCategoryManagement() {
     try {
-        const response = await fetch(`${API_URL}/categories/?include_subcategories=true`);
+        const response = await apiFetch(`${API_URL}/categories/?include_subcategories=true`);
         if (!response.ok) throw new Error('Failed to load categories');
         
         const categories = await response.json();
@@ -494,7 +713,7 @@ async function addSubcategoryInline() {
     }
     
     try {
-        const response = await fetch(`${API_URL}/categories/`, {
+        const response = await apiFetch(`${API_URL}/categories/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, parent_id: parseInt(parentId) })
@@ -509,7 +728,7 @@ async function addSubcategoryInline() {
         document.getElementById('newSubcategoryName').value = '';
         
         // Reload the category to get updated subcategories
-        const catResponse = await fetch(`${API_URL}/categories/?include_subcategories=true`);
+        const catResponse = await apiFetch(`${API_URL}/categories/?include_subcategories=true`);
         const categories = await catResponse.json();
         const updatedCategory = categories.find(c => c.id === parseInt(parentId));
         
@@ -535,7 +754,7 @@ async function deleteSubcategoryFromModal(id, name) {
     }
     
     try {
-        const response = await fetch(`${API_URL}/categories/${id}`, {
+        const response = await apiFetch(`${API_URL}/categories/${id}`, {
             method: 'DELETE'
         });
         
@@ -568,7 +787,7 @@ async function deleteSubcategoryFromModal(id, name) {
 // Edit Category
 async function editCategory(id) {
     try {
-        const response = await fetch(`${API_URL}/categories/?include_subcategories=true`);
+        const response = await apiFetch(`${API_URL}/categories/?include_subcategories=true`);
         if (!response.ok) throw new Error('Failed to load categories');
         
         const categories = await response.json();
@@ -586,7 +805,7 @@ async function editCategory(id) {
 // Set Category as Default
 async function setCategoryDefault(id) {
     try {
-        const response = await fetch(`${API_URL}/categories/${id}/set-default`, {
+        const response = await apiFetch(`${API_URL}/categories/${id}/set-default`, {
             method: 'POST'
         });
         
@@ -624,7 +843,7 @@ async function deleteCategory(id, name, isSubcategory = false) {
     }
     
     try {
-        const response = await fetch(`${API_URL}/categories/${id}`, {
+        const response = await apiFetch(`${API_URL}/categories/${id}`, {
             method: 'DELETE'
         });
         
@@ -752,7 +971,7 @@ async function loadDashboard() {
         }
         
         // Load summary
-        const summaryResponse = await fetch(`${API_URL}/reports/summary?${params}`);
+        const summaryResponse = await apiFetch(`${API_URL}/reports/summary?${params}`);
         const summary = await summaryResponse.json();
 
         document.getElementById('totalIncome').textContent = formatCurrency(summary.total_income);
@@ -762,8 +981,8 @@ async function loadDashboard() {
 
         // Load category breakdowns
         const [expenseResponse, incomeResponse] = await Promise.all([
-            fetch(`${API_URL}/reports/by-category?${params}&type=expense`),
-            fetch(`${API_URL}/reports/by-category?${params}&type=income`)
+            apiFetch(`${API_URL}/reports/by-category?${params}&type=expense`),
+            apiFetch(`${API_URL}/reports/by-category?${params}&type=income`)
         ]);
 
         const expenseData = await expenseResponse.json();
@@ -776,7 +995,7 @@ async function loadDashboard() {
         updateCategoryBreakdown(expenseData, incomeData);
 
         // Load recent transactions
-        const transResponse = await fetch(`${API_URL}/transactions/?include_excluded=false`);
+        const transResponse = await apiFetch(`${API_URL}/transactions/?include_excluded=false`);
         const transactions = await transResponse.json();
         
         const recentList = document.getElementById('recentTransList');
@@ -909,7 +1128,7 @@ async function loadTransactions() {
         if (typeFilter) params.append('type', typeFilter);
         if (categoryFilter) params.append('category_id', categoryFilter);
 
-        const response = await fetch(`${API_URL}/transactions/?${params}`);
+        const response = await apiFetch(`${API_URL}/transactions/?${params}`);
         if (!response.ok) throw new Error('Failed to load transactions');
 
         let transactions = await response.json();
@@ -1157,7 +1376,7 @@ async function deleteTransaction(id) {
     if (!confirm('Are you sure you want to delete this transaction?')) return;
 
     try {
-        const response = await fetch(`${API_URL}/transactions/${id}`, {
+        const response = await apiFetch(`${API_URL}/transactions/${id}`, {
             method: 'DELETE'
         });
 
@@ -1212,7 +1431,7 @@ async function bulkDeleteSelected() {
     if (!confirmed) return;
     
     try {
-        const response = await fetch(`${API_URL}/transactions/bulk-delete/`, {
+        const response = await apiFetch(`${API_URL}/transactions/bulk-delete/`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json'
@@ -1251,7 +1470,7 @@ async function handleBulkDeleteFileUpload(e) {
         formData.append('file', file);
 
         // First, get a preview of transactions to be deleted
-        const previewResponse = await fetch(`${API_URL}/transactions/bulk-delete-preview/`, {
+        const previewResponse = await apiFetch(`${API_URL}/transactions/bulk-delete-preview/`, {
             method: 'POST',
             body: formData
         });
@@ -1316,7 +1535,7 @@ async function confirmBulkDeleteFromFile() {
         const formData = new FormData();
         formData.append('file', window.pendingDeleteFile);
         
-        const response = await fetch(`${API_URL}/transactions/bulk-delete-by-file/`, {
+        const response = await apiFetch(`${API_URL}/transactions/bulk-delete-by-file/`, {
             method: 'POST',
             body: formData
         });
@@ -1346,7 +1565,7 @@ async function confirmBulkDeleteFromFile() {
 async function updateTransactionStatus(id, status) {
     const isExcluded = status === 'true';
     try {
-        const response = await fetch(`${API_URL}/transactions/${id}`, {
+        const response = await apiFetch(`${API_URL}/transactions/${id}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
@@ -1404,7 +1623,7 @@ function extractMerchantName(description) {
 // Apply category to multiple transactions
 async function applyBulkCategoryUpdate(transactionIds, categoryId) {
     try {
-        const response = await fetch(`${API_URL}/transactions/bulk-update/`, {
+        const response = await apiFetch(`${API_URL}/transactions/bulk-update/`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
@@ -1428,7 +1647,7 @@ async function applyBulkCategoryUpdate(transactionIds, categoryId) {
 // Load Budgets
 async function loadBudgets() {
     try {
-        const response = await fetch(`${API_URL}/budgets/`);
+        const response = await apiFetch(`${API_URL}/budgets/`);
         if (!response.ok) throw new Error('Failed to load budgets');
 
         state.budgets = await response.json();
@@ -1487,7 +1706,7 @@ async function handleBudgetSubmit(e) {
 
     try {
         const today = new Date();
-        const response = await fetch(`${API_URL}/budgets/`, {
+        const response = await apiFetch(`${API_URL}/budgets/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1519,7 +1738,7 @@ async function deleteBudget(id) {
     if (!confirm('Are you sure you want to delete this budget?')) return;
 
     try {
-        const response = await fetch(`${API_URL}/budgets/${id}`, {
+        const response = await apiFetch(`${API_URL}/budgets/${id}`, {
             method: 'DELETE'
         });
 
@@ -1541,19 +1760,19 @@ async function loadReports() {
         });
 
         // Load trending data
-        const trendingResponse = await fetch(`${API_URL}/reports/trending?months=6&type=expense`);
+        const trendingResponse = await apiFetch(`${API_URL}/reports/trending?months=6&type=expense`);
         const trending = await trendingResponse.json();
 
         updateTrendingChart(trending);
 
         // Load budget analysis
-        const budgetResponse = await fetch(`${API_URL}/reports/budget-analysis?${params}`);
+        const budgetResponse = await apiFetch(`${API_URL}/reports/budget-analysis?${params}`);
         const budgetAnalysis = await budgetResponse.json();
 
         displayBudgetAnalysis(budgetAnalysis);
 
         // Load category breakdown
-        const categoryResponse = await fetch(`${API_URL}/reports/by-category?${params}&type=expense`);
+        const categoryResponse = await apiFetch(`${API_URL}/reports/by-category?${params}&type=expense`);
         const categoryData = await categoryResponse.json();
 
         displayCategoryBreakdown(categoryData);
@@ -1665,7 +1884,7 @@ async function handleFileSelect(files) {
     formData.append('file', selectedFile);
 
     try {
-        const response = await fetch(`${API_URL}/uploads/preview`, {
+        const response = await apiFetch(`${API_URL}/uploads/preview`, {
             method: 'POST',
             body: formData
         });
@@ -1706,7 +1925,7 @@ async function confirmUpload() {
         statusDiv.textContent = 'Uploading and processing...';
         statusDiv.style.display = 'block';
 
-        const response = await fetch(`${API_URL}/uploads/upload`, {
+        const response = await apiFetch(`${API_URL}/uploads/upload`, {
             method: 'POST',
             body: formData
         });
@@ -1771,7 +1990,7 @@ async function loadRules() {
     if (state.currentPage !== 'rules') return;
     
     try {
-        const response = await fetch(`${API_URL}/rules/`);
+        const response = await apiFetch(`${API_URL}/rules/`);
         if (!response.ok) throw new Error('Failed to load rules');
         
         const rules = await response.json();
@@ -1812,7 +2031,7 @@ function displayRules(rules) {
 // Edit Rule
 async function editRule(id) {
     try {
-        const response = await fetch(`${API_URL}/rules/${id}`);
+        const response = await apiFetch(`${API_URL}/rules/${id}`);
         if (!response.ok) throw new Error('Failed to load rule');
         
         const rule = await response.json();
@@ -1840,7 +2059,7 @@ async function deleteRule(id) {
     if (!confirm('Are you sure you want to delete this rule?')) return;
     
     try {
-        const response = await fetch(`${API_URL}/rules/${id}`, {
+        const response = await apiFetch(`${API_URL}/rules/${id}`, {
             method: 'DELETE'
         });
         
@@ -1914,7 +2133,7 @@ async function applyRulesToAllTransactions() {
     }
     
     try {
-        const response = await fetch(`${API_URL}/rules/apply`, {
+        const response = await apiFetch(`${API_URL}/rules/apply`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1954,7 +2173,7 @@ async function applyRulesToAllTransactions() {
 // Export Rules
 async function exportRules() {
     try {
-        const response = await fetch(`${API_URL}/rules/export`);
+        const response = await apiFetch(`${API_URL}/rules/export`);
         if (!response.ok) throw new Error('Failed to export rules');
         
         const data = await response.json();
@@ -2063,7 +2282,7 @@ async function handleRulesImport(e) {
             return;
         }
         
-        const response = await fetch(`${API_URL}/rules/import`, {
+        const response = await apiFetch(`${API_URL}/rules/import`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2130,7 +2349,7 @@ async function testRule() {
     if (!testInput) return;
     
     try {
-        const response = await fetch(`${API_URL}/rules/test`, {
+        const response = await apiFetch(`${API_URL}/rules/test`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2171,7 +2390,7 @@ async function testRule() {
 // API Status Management
 async function loadApiStatus() {
     try {
-        const response = await fetch(`${API_URL}/status/`);
+        const response = await apiFetch(`${API_URL}/status/`);
         if (!response.ok) throw new Error('Failed to load API status');
         
         const status = await response.json();
@@ -2182,7 +2401,7 @@ async function loadApiStatus() {
             clearInterval(window.statusRefreshInterval);
         }
         window.statusRefreshInterval = setInterval(async () => {
-            const refreshResponse = await fetch(`${API_URL}/status/`);
+            const refreshResponse = await apiFetch(`${API_URL}/status/`);
             if (refreshResponse.ok) {
                 const refreshStatus = await refreshResponse.json();
                 updateApiStatusDisplay(refreshStatus);
@@ -2235,7 +2454,7 @@ async function handleApiToggle(event) {
     const messageDiv = document.getElementById('toggleMessage');
     
     try {
-        const response = await fetch(`${API_URL}/status/toggle`, {
+        const response = await apiFetch(`${API_URL}/status/toggle`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2269,5 +2488,247 @@ async function handleApiToggle(event) {
                 Failed to toggle API status
             </div>
         `;
+    }
+}
+
+// ========================
+// User Management Functions
+// ========================
+
+async function loadUsers() {
+    // Only show user management for superusers
+    const userManagementSection = document.getElementById('userManagementSection');
+    if (!state.currentUser || state.currentUser.role !== 'superuser') {
+        if (userManagementSection) userManagementSection.style.display = 'none';
+        return;
+    }
+    
+    if (userManagementSection) userManagementSection.style.display = 'block';
+    
+    try {
+        const response = await fetch(`${API_URL}/users/`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) throw new Error('Failed to load users');
+        
+        const users = await response.json();
+        renderUsersTable(users);
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+}
+
+function renderUsersTable(users) {
+    const tbody = document.getElementById('usersTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = users.map(user => `
+        <tr>
+            <td>
+                ${user.username}
+                ${user.is_default ? '<span class="default-badge">Default Admin</span>' : ''}
+            </td>
+            <td class="role-cell">
+                <span class="role-badge ${user.role}">${user.role === 'superuser' ? 'Super User' : 'Standard'}</span>
+            </td>
+            <td>${new Date(user.created_at).toLocaleDateString()}</td>
+            <td class="actions-cell">
+                <button class="btn-icon edit" onclick="editUser(${user.id})" title="Edit">
+                    <i class="fas fa-edit"></i>
+                </button>
+                ${!user.is_default ? `
+                    <button class="btn-icon delete" onclick="deleteUser(${user.id}, '${user.username}')" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                ` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openUserModal(user = null) {
+    const modal = document.getElementById('userModal');
+    const form = document.getElementById('userForm');
+    const title = document.getElementById('userModalTitle');
+    const submitBtn = document.getElementById('userSubmitBtn');
+    const passwordHint = document.getElementById('passwordHint');
+    const passwordInput = document.getElementById('userPassword');
+    const roleSelect = document.getElementById('userRole');
+    const usernameInput = document.getElementById('userUsername');
+    
+    form.reset();
+    document.getElementById('userId').value = '';
+    
+    if (user) {
+        // Edit mode
+        title.textContent = 'Edit User';
+        submitBtn.textContent = 'Save Changes';
+        passwordHint.style.display = 'block';
+        passwordInput.required = false;
+        
+        document.getElementById('userId').value = user.id;
+        usernameInput.value = user.username;
+        roleSelect.value = user.role;
+        
+        // Disable username and role for default admin
+        if (user.is_default) {
+            usernameInput.disabled = true;
+            roleSelect.disabled = true;
+        } else {
+            usernameInput.disabled = false;
+            roleSelect.disabled = false;
+        }
+    } else {
+        // Create mode
+        title.textContent = 'Add User';
+        submitBtn.textContent = 'Create User';
+        passwordHint.style.display = 'none';
+        passwordInput.required = true;
+        usernameInput.disabled = false;
+        roleSelect.disabled = false;
+    }
+    
+    openModal('userModal');
+}
+
+async function editUser(id) {
+    try {
+        const response = await fetch(`${API_URL}/users/${id}`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch user');
+        
+        const user = await response.json();
+        openUserModal(user);
+    } catch (error) {
+        console.error('Error fetching user:', error);
+        alert('Failed to load user details');
+    }
+}
+
+async function handleUserSubmit(e) {
+    e.preventDefault();
+    
+    const userId = document.getElementById('userId').value;
+    const username = document.getElementById('userUsername').value.trim();
+    const password = document.getElementById('userPassword').value;
+    const role = document.getElementById('userRole').value;
+    
+    const data = { username, role };
+    if (password) data.password = password;
+    
+    try {
+        let response;
+        if (userId) {
+            // Update
+            response = await fetch(`${API_URL}/users/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(data)
+            });
+        } else {
+            // Create
+            if (!password) {
+                alert('Password is required for new users');
+                return;
+            }
+            data.password = password;
+            response = await fetch(`${API_URL}/users/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(data)
+            });
+        }
+        
+        if (!response.ok) {
+            const error = await response.json();
+            alert(error.error || 'Failed to save user');
+            return;
+        }
+        
+        closeModal('userModal');
+        loadUsers();
+    } catch (error) {
+        console.error('Error saving user:', error);
+        alert('Failed to save user');
+    }
+}
+
+async function deleteUser(id, username) {
+    if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/users/${id}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            alert(error.error || 'Failed to delete user');
+            return;
+        }
+        
+        loadUsers();
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Failed to delete user');
+    }
+}
+
+async function handleChangePassword(e) {
+    e.preventDefault();
+    
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const errorDiv = document.getElementById('passwordError');
+    
+    errorDiv.style.display = 'none';
+    
+    if (newPassword !== confirmPassword) {
+        errorDiv.textContent = 'New passwords do not match';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    if (newPassword.length < 4) {
+        errorDiv.textContent = 'Password must be at least 4 characters';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/auth/change-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            errorDiv.textContent = data.error || 'Failed to change password';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        alert('Password changed successfully');
+        closeModal('changePasswordModal');
+        document.getElementById('changePasswordForm').reset();
+    } catch (error) {
+        console.error('Error changing password:', error);
+        errorDiv.textContent = 'Connection error. Please try again.';
+        errorDiv.style.display = 'block';
     }
 }

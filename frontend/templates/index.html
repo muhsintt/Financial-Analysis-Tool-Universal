@@ -4,12 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Expense Tracker - Financial Analysis</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=6">
+    <link rel="stylesheet" href="/static/css/style.css?v=7">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container">
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <i class="fas fa-wallet"></i>
+                <h1>ExpenseTracker</h1>
+                <p>Sign in to continue</p>
+            </div>
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="loginUsername">Username</label>
+                    <input type="text" id="loginUsername" class="form-control" placeholder="Enter username" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" class="form-control" placeholder="Enter password" required>
+                </div>
+                <div id="loginError" class="login-error" style="display: none;"></div>
+                <button type="submit" class="btn btn-primary btn-login">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </button>
+            </form>
+            <div class="login-footer">
+                <small>Default: admin / money</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="mainApp" style="display: none;">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
             <div class="logo">
@@ -57,6 +85,22 @@
                             <option value="annual">Annual</option>
                         </select>
                         <input type="month" id="monthPicker" class="form-control">
+                    </div>
+                    <div class="user-menu">
+                        <button class="btn btn-user" id="userMenuBtn">
+                            <i class="fas fa-user-circle"></i>
+                            <span id="currentUserDisplay">User</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="user-dropdown" id="userDropdown">
+                            <div class="user-info">
+                                <span id="dropdownUsername">Username</span>
+                                <span id="dropdownRole" class="role-badge">Role</span>
+                            </div>
+                            <hr>
+                            <a href="#" id="changePasswordLink"><i class="fas fa-key"></i> Change Password</a>
+                            <a href="#" id="logoutLink"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -321,6 +365,32 @@
                 <!-- Settings Page -->
                 <div id="settings" class="page">
                     <div class="settings-container">
+                        <!-- User Management Section (Superuser only) -->
+                        <div class="settings-section" id="userManagementSection">
+                            <h2><i class="fas fa-users"></i> User Management</h2>
+                            <div class="user-management-card">
+                                <div class="user-management-header">
+                                    <h3>System Users</h3>
+                                    <button class="btn btn-primary" id="addUserBtn">
+                                        <i class="fas fa-user-plus"></i> Add User
+                                    </button>
+                                </div>
+                                <table class="users-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Username</th>
+                                            <th>Role</th>
+                                            <th>Created</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usersTableBody">
+                                        <!-- Populated by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
                         <div class="settings-section">
                             <h2>API Status</h2>
                             <div class="api-status-card">
@@ -610,6 +680,64 @@
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save Rule</button>
                     <button type="button" class="btn btn-secondary" onclick="closeModal('ruleModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- User Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <span class="close" onclick="closeModal('userModal')">&times;</span>
+            <h2 id="userModalTitle">Add User</h2>
+            <form id="userForm">
+                <input type="hidden" id="userId">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="userUsername" class="form-control" placeholder="Enter username" required minlength="3">
+                </div>
+                <div class="form-group" id="userPasswordGroup">
+                    <label>Password</label>
+                    <input type="password" id="userPassword" class="form-control" placeholder="Enter password" minlength="4">
+                    <small id="passwordHint">Leave blank to keep current password (edit mode)</small>
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="userRole" class="form-control" required>
+                        <option value="standard">Standard (Read-only)</option>
+                        <option value="superuser">Super User (Full access)</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="userSubmitBtn">Create User</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('userModal')">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <span class="close" onclick="closeModal('changePasswordModal')">&times;</span>
+            <h2><i class="fas fa-key"></i> Change Password</h2>
+            <form id="changePasswordForm">
+                <div class="form-group">
+                    <label>Current Password</label>
+                    <input type="password" id="currentPassword" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" id="newPassword" class="form-control" required minlength="4">
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <input type="password" id="confirmPassword" class="form-control" required minlength="4">
+                </div>
+                <div id="passwordError" class="login-error" style="display: none;"></div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Change Password</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('changePasswordModal')">Cancel</button>
                 </div>
             </form>
         </div>
