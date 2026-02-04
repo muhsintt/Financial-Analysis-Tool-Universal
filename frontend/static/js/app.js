@@ -300,6 +300,28 @@ function getGregorianYearFromBadi(badiYear, badiMonth) {
     return badiYear + 1844;  // For 'Alá' and Ayyám-i-Há (in Feb/Mar of next Gregorian year)
 }
 
+// Get Gregorian date range for a Bahá'í month
+function getBadiMonthDateRange(badiYear, badiMonth) {
+    let startDate, endDate;
+    
+    if (badiMonth >= 1 && badiMonth <= 18) {
+        // Regular months (19 days each)
+        startDate = badiToGregorian(badiYear, badiMonth, 1);
+        endDate = badiToGregorian(badiYear, badiMonth, 19);
+    } else if (badiMonth === 0) {
+        // Ayyám-i-Há (intercalary days)
+        const ayyamDays = isLeapYearBadi(badiYear) ? 5 : 4;
+        startDate = badiToGregorian(badiYear, 0, 1);
+        endDate = badiToGregorian(badiYear, 0, ayyamDays);
+    } else if (badiMonth === 19) {
+        // 'Alá' (month of fasting)
+        startDate = badiToGregorian(badiYear, 19, 1);
+        endDate = badiToGregorian(badiYear, 19, 19);
+    }
+    
+    return { start: startDate, end: endDate };
+}
+
 // Fetch wrapper to always include credentials
 async function apiFetch(url, options = {}) {
     const defaultOptions = {
@@ -877,6 +899,9 @@ function navigateTo(page) {
             break;
         case 'reports':
             loadReports();
+            break;
+        case 'charts-summaries':
+            loadChartsSummaries();
             break;
         case 'upload':
             loadUploadHistory();
@@ -2318,6 +2343,401 @@ function displayCategoryBreakdown(data) {
             </div>
         </div>
     `).join('');
+}
+
+// ==========================================
+// Charts & Summaries Functions
+// ==========================================
+
+// Charts & Summaries state
+const csState = {
+    expenseChart: null,
+    incomeChart: null,
+    data: null
+};
+
+// Initialize Charts & Summaries page
+function initChartsSummaries() {
+    // Populate Bahá'í month selector
+    const badiMonthSelect = document.getElementById('csBadiMonth');
+    if (badiMonthSelect && badiMonthSelect.options.length === 0) {
+        BADI_MONTHS.forEach(month => {
+            const option = document.createElement('option');
+            option.value = month.number;
+            option.textContent = `${month.name} (${month.meaning})`;
+            badiMonthSelect.appendChild(option);
+        });
+    }
+    
+    // Set default values
+    const today = new Date();
+    const gregorianMonth = document.getElementById('csGregorianMonth');
+    if (gregorianMonth) {
+        gregorianMonth.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    }
+    
+    const badiYear = document.getElementById('csBadiYear');
+    if (badiYear) {
+        badiYear.value = state.badiYear || (today.getFullYear() - 1844 + 1);
+    }
+    
+    const customStart = document.getElementById('csCustomStart');
+    const customEnd = document.getElementById('csCustomEnd');
+    if (customStart && customEnd) {
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        customStart.value = firstDay.toISOString().split('T')[0];
+        customEnd.value = today.toISOString().split('T')[0];
+    }
+    
+    // Setup event listeners
+    setupChartsSummariesListeners();
+}
+
+// Setup event listeners for Charts & Summaries
+function setupChartsSummariesListeners() {
+    // Time frame type change
+    const timeFrameType = document.getElementById('csTimeFrameType');
+    if (timeFrameType) {
+        timeFrameType.addEventListener('change', (e) => {
+            const value = e.target.value;
+            document.getElementById('csGregorianSelector').style.display = value === 'gregorian-month' ? 'flex' : 'none';
+            document.getElementById('csBadiSelector').style.display = value === 'badi-month' ? 'flex' : 'none';
+            document.getElementById('csCustomSelector').style.display = value === 'custom' ? 'flex' : 'none';
+        });
+    }
+    
+    // Generate button
+    const generateBtn = document.getElementById('csGenerateBtn');
+    if (generateBtn) {
+        generateBtn.addEventListener('click', generateChartsSummaries);
+    }
+    
+    // Print buttons
+    const printPortraitBtn = document.getElementById('csPrintPortraitBtn');
+    if (printPortraitBtn) {
+        printPortraitBtn.addEventListener('click', () => printChartsSummaries('portrait'));
+    }
+    
+    const printLandscapeBtn = document.getElementById('csPrintLandscapeBtn');
+    if (printLandscapeBtn) {
+        printLandscapeBtn.addEventListener('click', () => printChartsSummaries('landscape'));
+    }
+}
+
+// Load Charts & Summaries page
+async function loadChartsSummaries() {
+    initChartsSummaries();
+    await generateChartsSummaries();
+}
+
+// Get date range based on selected time frame
+function getCSDateRange() {
+    const timeFrameType = document.getElementById('csTimeFrameType').value;
+    let startDate, endDate, label;
+    
+    if (timeFrameType === 'gregorian-month') {
+        const monthValue = document.getElementById('csGregorianMonth').value;
+        if (!monthValue) return null;
+        
+        const [year, month] = monthValue.split('-').map(Number);
+        startDate = new Date(year, month - 1, 1);
+        endDate = new Date(year, month, 0); // Last day of month
+        
+        label = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    } else if (timeFrameType === 'badi-month') {
+        const badiYear = parseInt(document.getElementById('csBadiYear').value);
+        const badiMonth = parseInt(document.getElementById('csBadiMonth').value);
+        
+        if (!badiYear || isNaN(badiMonth)) return null;
+        
+        // Convert Bahá'í dates to Gregorian
+        const range = getBadiMonthDateRange(badiYear, badiMonth);
+        startDate = range.start;
+        endDate = range.end;
+        
+        const monthInfo = BADI_MONTHS.find(m => m.number === badiMonth);
+        label = `${monthInfo ? monthInfo.name : 'Month ' + badiMonth} ${badiYear} BE`;
+    } else {
+        // Custom range
+        const start = document.getElementById('csCustomStart').value;
+        const end = document.getElementById('csCustomEnd').value;
+        
+        if (!start || !end) return null;
+        
+        startDate = new Date(start);
+        endDate = new Date(end);
+        
+        label = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+    }
+    
+    return {
+        start: startDate.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0],
+        label
+    };
+}
+
+// Generate Charts & Summaries
+async function generateChartsSummaries() {
+    const dateRange = getCSDateRange();
+    if (!dateRange) {
+        alert('Please select a valid date range');
+        return;
+    }
+    
+    try {
+        // Fetch transactions for the date range
+        const params = new URLSearchParams({
+            start_date: dateRange.start,
+            end_date: dateRange.end,
+            limit: 10000
+        });
+        
+        const response = await apiFetch(`${API_URL}/transactions/?${params}`);
+        if (!response.ok) throw new Error('Failed to load transactions');
+        
+        const data = await response.json();
+        csState.data = data;
+        
+        // Calculate summaries
+        const transactions = data.transactions || [];
+        let totalIncome = 0;
+        let totalExpenses = 0;
+        const expensesByCategory = {};
+        const incomeByCategory = {};
+        
+        transactions.forEach(t => {
+            if (t.type === 'income') {
+                totalIncome += t.amount;
+                incomeByCategory[t.category] = (incomeByCategory[t.category] || 0) + t.amount;
+            } else {
+                totalExpenses += t.amount;
+                expensesByCategory[t.category] = (expensesByCategory[t.category] || 0) + t.amount;
+            }
+        });
+        
+        // Update summary cards
+        document.getElementById('csTotalIncome').textContent = formatCurrency(totalIncome);
+        document.getElementById('csTotalExpenses').textContent = formatCurrency(totalExpenses);
+        document.getElementById('csNetBalance').textContent = formatCurrency(totalIncome - totalExpenses);
+        document.getElementById('csTransactionCount').textContent = transactions.length;
+        
+        // Update net balance color
+        const netBalanceEl = document.getElementById('csNetBalance');
+        if (totalIncome - totalExpenses >= 0) {
+            netBalanceEl.style.color = '#27ae60';
+        } else {
+            netBalanceEl.style.color = '#e74c3c';
+        }
+        
+        // Prepare chart data
+        const chartType = document.getElementById('csChartType').value;
+        const chartColors = [
+            '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
+            '#1abc9c', '#e67e22', '#34495e', '#16a085', '#c0392b',
+            '#8e44ad', '#27ae60', '#d35400', '#2980b9', '#f1c40f'
+        ];
+        
+        // Update expense chart
+        updateCSChart('csExpenseChart', 'expense', expensesByCategory, chartType, chartColors);
+        
+        // Update income chart
+        updateCSChart('csIncomeChart', 'income', incomeByCategory, chartType, chartColors);
+        
+        // Update tables
+        updateCSTables(expensesByCategory, incomeByCategory, transactions);
+        
+        // Update top transactions
+        updateCSTopTransactions(transactions);
+        
+        // Update print header
+        document.getElementById('csPrintDateRange').textContent = `Period: ${dateRange.label}`;
+        document.getElementById('csPrintGeneratedDate').textContent = `Generated: ${new Date().toLocaleString()}`;
+        
+    } catch (error) {
+        console.error('Error generating charts & summaries:', error);
+        alert('Error generating report: ' + error.message);
+    }
+}
+
+// Update a chart
+function updateCSChart(canvasId, type, dataObj, chartType, colors) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    
+    // Destroy existing chart
+    if (type === 'expense' && csState.expenseChart) {
+        csState.expenseChart.destroy();
+    } else if (type === 'income' && csState.incomeChart) {
+        csState.incomeChart.destroy();
+    }
+    
+    const labels = Object.keys(dataObj);
+    const data = Object.values(dataObj);
+    
+    if (labels.length === 0) {
+        ctx.parentElement.querySelector('canvas').style.display = 'none';
+        return;
+    }
+    
+    ctx.style.display = 'block';
+    
+    const chartConfig = {
+        type: chartType,
+        data: {
+            labels: labels,
+            datasets: [{
+                label: type === 'expense' ? 'Expenses' : 'Income',
+                data: data,
+                backgroundColor: colors.slice(0, labels.length),
+                borderColor: chartType === 'line' ? colors[0] : colors.slice(0, labels.length),
+                borderWidth: chartType === 'line' ? 2 : 1,
+                fill: chartType === 'line',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: ['pie', 'doughnut', 'polarArea'].includes(chartType),
+                    position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed.y !== undefined ? context.parsed.y : context.parsed;
+                            return `${context.label}: ${formatCurrency(value)}`;
+                        }
+                    }
+                }
+            },
+            scales: ['pie', 'doughnut', 'polarArea', 'radar'].includes(chartType) ? {} : {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return formatCurrency(value);
+                        }
+                    }
+                }
+            }
+        }
+    };
+    
+    const chart = new Chart(ctx, chartConfig);
+    
+    if (type === 'expense') {
+        csState.expenseChart = chart;
+    } else {
+        csState.incomeChart = chart;
+    }
+}
+
+// Update tables
+function updateCSTables(expensesByCategory, incomeByCategory, transactions) {
+    // Expense table
+    const expenseTotal = Object.values(expensesByCategory).reduce((a, b) => a + b, 0);
+    const expenseBody = document.getElementById('csExpenseTableBody');
+    const expenseTransactions = transactions.filter(t => t.type === 'expense');
+    
+    if (Object.keys(expensesByCategory).length === 0) {
+        expenseBody.innerHTML = '<tr><td colspan="4">No expense data</td></tr>';
+    } else {
+        expenseBody.innerHTML = Object.entries(expensesByCategory)
+            .sort((a, b) => b[1] - a[1])
+            .map(([category, amount]) => {
+                const count = expenseTransactions.filter(t => t.category === category).length;
+                const percentage = expenseTotal > 0 ? ((amount / expenseTotal) * 100).toFixed(1) : 0;
+                return `
+                    <tr>
+                        <td>${category}</td>
+                        <td>${formatCurrency(amount)}</td>
+                        <td>${percentage}%</td>
+                        <td>${count}</td>
+                    </tr>
+                `;
+            }).join('');
+    }
+    
+    document.getElementById('csExpenseTableTotal').textContent = formatCurrency(expenseTotal);
+    document.getElementById('csExpenseTableCount').textContent = expenseTransactions.length;
+    
+    // Income table
+    const incomeTotal = Object.values(incomeByCategory).reduce((a, b) => a + b, 0);
+    const incomeBody = document.getElementById('csIncomeTableBody');
+    const incomeTransactions = transactions.filter(t => t.type === 'income');
+    
+    if (Object.keys(incomeByCategory).length === 0) {
+        incomeBody.innerHTML = '<tr><td colspan="4">No income data</td></tr>';
+    } else {
+        incomeBody.innerHTML = Object.entries(incomeByCategory)
+            .sort((a, b) => b[1] - a[1])
+            .map(([category, amount]) => {
+                const count = incomeTransactions.filter(t => t.category === category).length;
+                const percentage = incomeTotal > 0 ? ((amount / incomeTotal) * 100).toFixed(1) : 0;
+                return `
+                    <tr>
+                        <td>${category}</td>
+                        <td>${formatCurrency(amount)}</td>
+                        <td>${percentage}%</td>
+                        <td>${count}</td>
+                    </tr>
+                `;
+            }).join('');
+    }
+    
+    document.getElementById('csIncomeTableTotal').textContent = formatCurrency(incomeTotal);
+    document.getElementById('csIncomeTableCount').textContent = incomeTransactions.length;
+}
+
+// Update top transactions
+function updateCSTopTransactions(transactions) {
+    const tbody = document.getElementById('csTopTransactionsBody');
+    
+    if (transactions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">No transactions found</td></tr>';
+        return;
+    }
+    
+    // Sort by amount (descending) and take top 10
+    const topTransactions = [...transactions]
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 10);
+    
+    tbody.innerHTML = topTransactions.map(t => `
+        <tr>
+            <td>${new Date(t.date).toLocaleDateString()}</td>
+            <td>${escapeHtml(t.description)}</td>
+            <td>${t.category || 'Uncategorized'}</td>
+            <td><span class="tag ${t.type}">${t.type}</span></td>
+            <td>${formatCurrency(t.amount)}</td>
+        </tr>
+    `).join('');
+}
+
+// Print Charts & Summaries
+function printChartsSummaries(orientation) {
+    // Create a style element for page orientation
+    const styleId = 'print-orientation-style';
+    let styleEl = document.getElementById(styleId);
+    
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        document.head.appendChild(styleEl);
+    }
+    
+    // Set the page orientation
+    if (orientation === 'landscape') {
+        styleEl.textContent = '@page { size: landscape; margin: 1cm; }';
+    } else {
+        styleEl.textContent = '@page { size: portrait; margin: 1cm; }';
+    }
+    
+    // Trigger print
+    window.print();
 }
 
 // File Upload Handling

@@ -2494,3 +2494,403 @@ body.read-only .toggle-section {
     opacity: 0.5;
     pointer-events: none;
 }
+
+/* ==========================================
+   Charts & Summaries Page Styles
+   ========================================== */
+
+.charts-summaries-container {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.cs-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-end;
+    padding: 20px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.cs-control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cs-control-group label {
+    font-weight: 500;
+    color: #666;
+    white-space: nowrap;
+}
+
+.cs-control-group .form-control {
+    min-width: 120px;
+}
+
+.cs-print-controls {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+/* Summary Cards */
+.cs-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.cs-card {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    gap: 15px;
+}
+
+.cs-card-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+}
+
+.cs-card.income .cs-card-icon {
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+}
+
+.cs-card.expense .cs-card-icon {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.cs-card.net .cs-card-icon {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+}
+
+.cs-card.transactions .cs-card-icon {
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+}
+
+.cs-card-content h4 {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+
+.cs-card-content p {
+    margin: 5px 0 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #333;
+}
+
+/* Charts Section */
+.cs-charts-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.cs-chart-container {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 20px;
+}
+
+.cs-chart-container h3 {
+    margin: 0 0 15px;
+    font-size: 1.1rem;
+    color: #333;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 10px;
+}
+
+.cs-chart-container canvas {
+    max-height: 350px;
+}
+
+/* Tables Section */
+.cs-tables-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.cs-table-container {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 20px;
+    overflow-x: auto;
+}
+
+.cs-table-container h3 {
+    margin: 0 0 15px;
+    font-size: 1.1rem;
+    color: #333;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 10px;
+}
+
+.cs-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.cs-table th,
+.cs-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.cs-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #333;
+}
+
+.cs-table tbody tr:hover {
+    background: #f5f5f5;
+}
+
+.cs-table tfoot {
+    font-weight: 600;
+    background: #f0f0f0;
+}
+
+/* Top Transactions */
+.cs-top-transactions {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.cs-top-transactions h3 {
+    margin: 0 0 15px;
+    font-size: 1.1rem;
+    color: #333;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 10px;
+}
+
+/* Print Header */
+.cs-print-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.cs-print-header h1 {
+    margin: 0;
+    font-size: 2rem;
+    color: #333;
+}
+
+.cs-print-header p {
+    margin: 5px 0;
+    color: #666;
+}
+
+/* Print-only class */
+.print-only {
+    display: none;
+}
+
+/* ==========================================
+   Print Styles
+   ========================================== */
+
+@media print {
+    /* Hide non-printable elements */
+    .sidebar,
+    .header,
+    .no-print,
+    .nav-menu,
+    .menu-toggle,
+    .btn {
+        display: none !important;
+    }
+    
+    /* Show print-only elements */
+    .print-only {
+        display: block !important;
+    }
+    
+    /* Reset main content margin */
+    .main-content {
+        margin-left: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* Show only the charts-summaries page */
+    .page {
+        display: none !important;
+    }
+    
+    .page#charts-summaries {
+        display: block !important;
+    }
+    
+    /* Container styling */
+    .charts-summaries-container {
+        padding: 0;
+        max-width: 100%;
+    }
+    
+    /* Cards for print */
+    .cs-summary-cards {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 20px;
+        page-break-inside: avoid;
+    }
+    
+    .cs-card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+        padding: 10px;
+    }
+    
+    .cs-card-icon {
+        width: 35px;
+        height: 35px;
+        font-size: 1rem;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .cs-card-content p {
+        font-size: 1.2rem;
+    }
+    
+    /* Charts for print */
+    .cs-charts-section {
+        page-break-inside: avoid;
+    }
+    
+    .cs-chart-container {
+        box-shadow: none;
+        border: 1px solid #ddd;
+        page-break-inside: avoid;
+    }
+    
+    .cs-chart-container canvas {
+        max-height: 250px;
+    }
+    
+    /* Tables for print */
+    .cs-tables-section {
+        grid-template-columns: 1fr;
+        page-break-inside: avoid;
+    }
+    
+    .cs-table-container {
+        box-shadow: none;
+        border: 1px solid #ddd;
+        page-break-inside: avoid;
+    }
+    
+    .cs-table th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    /* Top transactions for print */
+    .cs-top-transactions {
+        box-shadow: none;
+        border: 1px solid #ddd;
+        page-break-inside: avoid;
+    }
+    
+    /* Page breaks */
+    .cs-charts-section,
+    .cs-tables-section {
+        page-break-before: auto;
+    }
+    
+    /* Ensure colors print */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}
+
+/* Landscape print mode */
+@page {
+    margin: 1cm;
+}
+
+body.print-landscape {
+    /* This will be set via JavaScript before printing */
+}
+
+@media print and (orientation: landscape) {
+    .cs-charts-section {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .cs-tables-section {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media print and (orientation: portrait) {
+    .cs-charts-section {
+        grid-template-columns: 1fr;
+    }
+    
+    .cs-tables-section {
+        grid-template-columns: 1fr;
+    }
+    
+    .cs-summary-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Responsive adjustments for Charts & Summaries */
+@media (max-width: 768px) {
+    .cs-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .cs-control-group {
+        flex-wrap: wrap;
+    }
+    
+    .cs-print-controls {
+        margin-left: 0;
+        justify-content: center;
+    }
+    
+    .cs-charts-section,
+    .cs-tables-section {
+        grid-template-columns: 1fr;
+    }
+    
+    .cs-summary-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
