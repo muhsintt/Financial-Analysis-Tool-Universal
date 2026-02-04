@@ -322,6 +322,21 @@ function getBadiMonthDateRange(badiYear, badiMonth) {
     return { start: startDate, end: endDate };
 }
 
+// Get Gregorian date range for an entire Bahá'í year
+function getBadiYearDateRange(badiYear) {
+    // Bahá'í year starts at Naw-Rúz (March 20/21) of the corresponding Gregorian year
+    // and ends the day before the next Naw-Rúz
+    const gregorianYear = badiYear + 1843;
+    const startDate = getNawRuz(gregorianYear);
+    
+    // End date is the day before next Naw-Rúz
+    const nextNawRuz = getNawRuz(gregorianYear + 1);
+    const endDate = new Date(nextNawRuz);
+    endDate.setDate(endDate.getDate() - 1);
+    
+    return { start: startDate, end: endDate };
+}
+
 // Fetch wrapper to always include credentials
 async function apiFetch(url, options = {}) {
     const defaultOptions = {
@@ -2381,6 +2396,18 @@ function initChartsSummaries() {
         badiYear.value = state.badiYear || (today.getFullYear() - 1844 + 1);
     }
     
+    // Set Gregorian year default
+    const gregorianYear = document.getElementById('csGregorianYear');
+    if (gregorianYear) {
+        gregorianYear.value = today.getFullYear();
+    }
+    
+    // Set Bahá'í year only default
+    const badiYearOnly = document.getElementById('csBadiYearOnly');
+    if (badiYearOnly) {
+        badiYearOnly.value = state.badiYear || (today.getFullYear() - 1844 + 1);
+    }
+    
     const customStart = document.getElementById('csCustomStart');
     const customEnd = document.getElementById('csCustomEnd');
     if (customStart && customEnd) {
@@ -2391,6 +2418,9 @@ function initChartsSummaries() {
     
     // Setup event listeners
     setupChartsSummariesListeners();
+    
+    // Initialize comparison controls
+    initComparisonControls();
 }
 
 // Setup event listeners for Charts & Summaries
@@ -2401,7 +2431,9 @@ function setupChartsSummariesListeners() {
         timeFrameType.addEventListener('change', (e) => {
             const value = e.target.value;
             document.getElementById('csGregorianSelector').style.display = value === 'gregorian-month' ? 'flex' : 'none';
+            document.getElementById('csGregorianYearSelector').style.display = value === 'gregorian-year' ? 'flex' : 'none';
             document.getElementById('csBadiSelector').style.display = value === 'badi-month' ? 'flex' : 'none';
+            document.getElementById('csBadiYearSelector').style.display = value === 'badi-year' ? 'flex' : 'none';
             document.getElementById('csCustomSelector').style.display = value === 'custom' ? 'flex' : 'none';
         });
     }
@@ -2412,15 +2444,32 @@ function setupChartsSummariesListeners() {
         generateBtn.addEventListener('click', generateChartsSummaries);
     }
     
-    // Print buttons
-    const printPortraitBtn = document.getElementById('csPrintPortraitBtn');
-    if (printPortraitBtn) {
-        printPortraitBtn.addEventListener('click', () => printChartsSummaries('portrait'));
-    }
+    // Print button dropdown
+    const printBtn = document.getElementById('csPrintBtn');
+    const printMenu = document.getElementById('csPrintMenu');
     
-    const printLandscapeBtn = document.getElementById('csPrintLandscapeBtn');
-    if (printLandscapeBtn) {
-        printLandscapeBtn.addEventListener('click', () => printChartsSummaries('landscape'));
+    if (printBtn && printMenu) {
+        // Toggle menu on button click
+        printBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            printMenu.classList.toggle('show');
+        });
+        
+        // Handle orientation option clicks
+        document.querySelectorAll('.cs-print-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                const orientation = e.currentTarget.dataset.orientation;
+                printMenu.classList.remove('show');
+                printChartsSummaries(orientation);
+            });
+        });
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.cs-print-dropdown')) {
+                printMenu.classList.remove('show');
+            }
+        });
     }
 }
 
@@ -2444,6 +2493,14 @@ function getCSDateRange() {
         endDate = new Date(year, month, 0); // Last day of month
         
         label = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    } else if (timeFrameType === 'gregorian-year') {
+        const year = parseInt(document.getElementById('csGregorianYear').value);
+        if (!year) return null;
+        
+        startDate = new Date(year, 0, 1); // January 1
+        endDate = new Date(year, 11, 31); // December 31
+        
+        label = `Year ${year}`;
     } else if (timeFrameType === 'badi-month') {
         const badiYear = parseInt(document.getElementById('csBadiYear').value);
         const badiMonth = parseInt(document.getElementById('csBadiMonth').value);
@@ -2457,6 +2514,16 @@ function getCSDateRange() {
         
         const monthInfo = BADI_MONTHS.find(m => m.number === badiMonth);
         label = `${monthInfo ? monthInfo.name : 'Month ' + badiMonth} ${badiYear} BE`;
+    } else if (timeFrameType === 'badi-year') {
+        const badiYear = parseInt(document.getElementById('csBadiYearOnly').value);
+        if (!badiYear) return null;
+        
+        // Bahá'í year starts at Naw-Rúz (March 20/21) and ends the day before next Naw-Rúz
+        const range = getBadiYearDateRange(badiYear);
+        startDate = range.start;
+        endDate = range.end;
+        
+        label = `Bahá'í Year ${badiYear} BE`;
     } else {
         // Custom range
         const start = document.getElementById('csCustomStart').value;
@@ -2485,34 +2552,44 @@ async function generateChartsSummaries() {
         return;
     }
     
+    // Show loading state
+    const generateBtn = document.getElementById('csGenerateBtn');
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+    }
+    
     try {
         // Fetch transactions for the date range
         const params = new URLSearchParams({
             start_date: dateRange.start,
             end_date: dateRange.end,
-            limit: 10000
+            include_excluded: 'false'
         });
         
         const response = await apiFetch(`${API_URL}/transactions/?${params}`);
         if (!response.ok) throw new Error('Failed to load transactions');
         
         const data = await response.json();
-        csState.data = data;
+        
+        // API returns array directly, not {transactions: [...]}
+        const transactions = Array.isArray(data) ? data : (data.transactions || []);
+        csState.data = { transactions, dateRange };
         
         // Calculate summaries
-        const transactions = data.transactions || [];
         let totalIncome = 0;
         let totalExpenses = 0;
         const expensesByCategory = {};
         const incomeByCategory = {};
         
         transactions.forEach(t => {
+            const cat = t.category_name || t.category || 'Uncategorized';
             if (t.type === 'income') {
                 totalIncome += t.amount;
-                incomeByCategory[t.category] = (incomeByCategory[t.category] || 0) + t.amount;
+                incomeByCategory[cat] = (incomeByCategory[cat] || 0) + t.amount;
             } else {
                 totalExpenses += t.amount;
-                expensesByCategory[t.category] = (expensesByCategory[t.category] || 0) + t.amount;
+                expensesByCategory[cat] = (expensesByCategory[cat] || 0) + t.amount;
             }
         });
         
@@ -2554,10 +2631,57 @@ async function generateChartsSummaries() {
         document.getElementById('csPrintDateRange').textContent = `Period: ${dateRange.label}`;
         document.getElementById('csPrintGeneratedDate').textContent = `Generated: ${new Date().toLocaleString()}`;
         
+        // Show preview message
+        if (transactions.length === 0) {
+            alert(`No transactions found for ${dateRange.label}.\n\nTry selecting a different date range.`);
+        } else {
+            // Show success notification with summary
+            const summaryMsg = `Report generated for ${dateRange.label}\n\n` +
+                `📊 Transactions: ${transactions.length}\n` +
+                `💰 Income: ${formatCurrency(totalIncome)}\n` +
+                `💸 Expenses: ${formatCurrency(totalExpenses)}\n` +
+                `📈 Net: ${formatCurrency(totalIncome - totalExpenses)}\n\n` +
+                `Click "Print Portrait" or "Print Landscape" to print this report.`;
+            
+            // Show brief notification
+            showCSNotification(`Report ready: ${transactions.length} transactions for ${dateRange.label}`);
+        }
+        
     } catch (error) {
         console.error('Error generating charts & summaries:', error);
         alert('Error generating report: ' + error.message);
+    } finally {
+        // Reset button state
+        const generateBtn = document.getElementById('csGenerateBtn');
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = '<i class="fas fa-sync"></i> Generate';
+        }
     }
+}
+
+// Show notification for Charts & Summaries
+function showCSNotification(message) {
+    // Create or get notification element
+    let notification = document.getElementById('csNotification');
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.id = 'csNotification';
+        notification.className = 'cs-notification';
+        document.querySelector('.charts-summaries-container')?.prepend(notification);
+    }
+    
+    notification.textContent = message;
+    notification.style.display = 'block';
+    notification.classList.add('show');
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 300);
+    }, 5000);
 }
 
 // Update a chart
@@ -2648,7 +2772,7 @@ function updateCSTables(expensesByCategory, incomeByCategory, transactions) {
         expenseBody.innerHTML = Object.entries(expensesByCategory)
             .sort((a, b) => b[1] - a[1])
             .map(([category, amount]) => {
-                const count = expenseTransactions.filter(t => t.category === category).length;
+                const count = expenseTransactions.filter(t => (t.category_name || t.category || 'Uncategorized') === category).length;
                 const percentage = expenseTotal > 0 ? ((amount / expenseTotal) * 100).toFixed(1) : 0;
                 return `
                     <tr>
@@ -2675,7 +2799,7 @@ function updateCSTables(expensesByCategory, incomeByCategory, transactions) {
         incomeBody.innerHTML = Object.entries(incomeByCategory)
             .sort((a, b) => b[1] - a[1])
             .map(([category, amount]) => {
-                const count = incomeTransactions.filter(t => t.category === category).length;
+                const count = incomeTransactions.filter(t => (t.category_name || t.category || 'Uncategorized') === category).length;
                 const percentage = incomeTotal > 0 ? ((amount / incomeTotal) * 100).toFixed(1) : 0;
                 return `
                     <tr>
@@ -2710,7 +2834,7 @@ function updateCSTopTransactions(transactions) {
         <tr>
             <td>${new Date(t.date).toLocaleDateString()}</td>
             <td>${escapeHtml(t.description)}</td>
-            <td>${t.category || 'Uncategorized'}</td>
+            <td>${t.category_name || t.category || 'Uncategorized'}</td>
             <td><span class="tag ${t.type}">${t.type}</span></td>
             <td>${formatCurrency(t.amount)}</td>
         </tr>
@@ -2738,6 +2862,454 @@ function printChartsSummaries(orientation) {
     
     // Trigger print
     window.print();
+}
+
+// Print Comparison function
+function printComparison(orientation) {
+    // Hide the print options dropdown
+    const printOptions = document.getElementById('csComparePrintOptions');
+    if (printOptions) {
+        printOptions.classList.remove('show');
+    }
+    
+    // Reuse the same print logic
+    printChartsSummaries(orientation);
+}
+
+// ==========================================
+// Period Comparison Functions
+// ==========================================
+
+const compareState = {
+    expenseChart: null,
+    incomeChart: null,
+    expenseOverlay: null,
+    incomeOverlay: null
+};
+
+// Initialize comparison controls
+function initComparisonControls() {
+    const today = new Date();
+    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    
+    // Set default values for Period 1 (current month)
+    const compare1Month = document.getElementById('csCompare1Month');
+    if (compare1Month) {
+        compare1Month.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    }
+    
+    // Set default values for Period 2 (last month)
+    const compare2Month = document.getElementById('csCompare2Month');
+    if (compare2Month) {
+        compare2Month.value = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`;
+    }
+    
+    // Setup period type change listeners
+    setupPeriodTypeListener('csCompare1Type', 'csCompare1Inputs', 1);
+    setupPeriodTypeListener('csCompare2Type', 'csCompare2Inputs', 2);
+    
+    // Compare button
+    const compareBtn = document.getElementById('csCompareBtn');
+    if (compareBtn) {
+        compareBtn.addEventListener('click', runComparison);
+    }
+    
+    // View mode toggle
+    const viewMode = document.getElementById('csCompareViewMode');
+    if (viewMode) {
+        viewMode.addEventListener('change', (e) => {
+            const sideBySide = document.getElementById('csCompareSideBySide');
+            const overlay = document.getElementById('csCompareOverlay');
+            
+            if (e.target.value === 'side-by-side') {
+                sideBySide.style.display = 'grid';
+                overlay.style.display = 'none';
+            } else {
+                sideBySide.style.display = 'none';
+                overlay.style.display = 'grid';
+            }
+        });
+    }
+    
+    // Print button toggle
+    const printBtn = document.getElementById('csComparePrintBtn');
+    const printOptions = document.getElementById('csComparePrintOptions');
+    if (printBtn && printOptions) {
+        printBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            printOptions.classList.toggle('show');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!printBtn.contains(e.target) && !printOptions.contains(e.target)) {
+                printOptions.classList.remove('show');
+            }
+        });
+    }
+}
+
+// Setup period type change listener
+function setupPeriodTypeListener(selectId, inputsId, periodNum) {
+    const select = document.getElementById(selectId);
+    const inputsDiv = document.getElementById(inputsId);
+    
+    if (!select || !inputsDiv) return;
+    
+    select.addEventListener('change', (e) => {
+        const type = e.target.value;
+        let html = '';
+        
+        const today = new Date();
+        const badiYear = today.getFullYear() - 1844 + 1;
+        
+        switch (type) {
+            case 'gregorian-month':
+                html = `<input type="month" id="csCompare${periodNum}Month" class="form-control" value="${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}">`;
+                break;
+            case 'gregorian-year':
+                html = `<input type="number" id="csCompare${periodNum}Year" class="form-control" value="${today.getFullYear()}" min="1900" max="2100" style="width: 100px;">`;
+                break;
+            case 'badi-month':
+                html = `
+                    <input type="number" id="csCompare${periodNum}BadiYear" class="form-control" value="${badiYear}" min="1" style="width: 80px;">
+                    <select id="csCompare${periodNum}BadiMonth" class="form-control">
+                        ${BADI_MONTHS.map(m => `<option value="${m.number}">${m.name}</option>`).join('')}
+                    </select>
+                `;
+                break;
+            case 'badi-year':
+                html = `<input type="number" id="csCompare${periodNum}BadiYearOnly" class="form-control" value="${badiYear}" min="1" style="width: 100px;">`;
+                break;
+            case 'custom':
+                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                html = `
+                    <input type="date" id="csCompare${periodNum}Start" class="form-control" value="${firstDay.toISOString().split('T')[0]}">
+                    <span>to</span>
+                    <input type="date" id="csCompare${periodNum}End" class="form-control" value="${today.toISOString().split('T')[0]}">
+                `;
+                break;
+        }
+        
+        inputsDiv.innerHTML = html;
+    });
+}
+
+// Get date range for a comparison period
+function getComparePeriodRange(periodNum) {
+    const type = document.getElementById(`csCompare${periodNum}Type`).value;
+    let startDate, endDate, label;
+    
+    switch (type) {
+        case 'gregorian-month': {
+            const monthValue = document.getElementById(`csCompare${periodNum}Month`)?.value;
+            if (!monthValue) return null;
+            const [year, month] = monthValue.split('-').map(Number);
+            startDate = new Date(year, month - 1, 1);
+            endDate = new Date(year, month, 0);
+            label = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            break;
+        }
+        case 'gregorian-year': {
+            const year = parseInt(document.getElementById(`csCompare${periodNum}Year`)?.value);
+            if (!year) return null;
+            startDate = new Date(year, 0, 1);
+            endDate = new Date(year, 11, 31);
+            label = `Year ${year}`;
+            break;
+        }
+        case 'badi-month': {
+            const badiYear = parseInt(document.getElementById(`csCompare${periodNum}BadiYear`)?.value);
+            const badiMonth = parseInt(document.getElementById(`csCompare${periodNum}BadiMonth`)?.value);
+            if (!badiYear || isNaN(badiMonth)) return null;
+            const range = getBadiMonthDateRange(badiYear, badiMonth);
+            startDate = range.start;
+            endDate = range.end;
+            const monthInfo = BADI_MONTHS.find(m => m.number === badiMonth);
+            label = `${monthInfo ? monthInfo.name : 'Month ' + badiMonth} ${badiYear} BE`;
+            break;
+        }
+        case 'badi-year': {
+            const badiYear = parseInt(document.getElementById(`csCompare${periodNum}BadiYearOnly`)?.value);
+            if (!badiYear) return null;
+            const range = getBadiYearDateRange(badiYear);
+            startDate = range.start;
+            endDate = range.end;
+            label = `Bahá'í Year ${badiYear} BE`;
+            break;
+        }
+        case 'custom': {
+            const start = document.getElementById(`csCompare${periodNum}Start`)?.value;
+            const end = document.getElementById(`csCompare${periodNum}End`)?.value;
+            if (!start || !end) return null;
+            startDate = new Date(start);
+            endDate = new Date(end);
+            label = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+            break;
+        }
+    }
+    
+    return {
+        start: startDate.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0],
+        label
+    };
+}
+
+// Fetch transactions for a period
+async function fetchPeriodData(range) {
+    const params = new URLSearchParams({
+        start_date: range.start,
+        end_date: range.end,
+        include_excluded: 'false'
+    });
+    
+    const response = await apiFetch(`${API_URL}/transactions/?${params}`);
+    if (!response.ok) throw new Error('Failed to load transactions');
+    
+    const data = await response.json();
+    const transactions = Array.isArray(data) ? data : (data.transactions || []);
+    
+    // Calculate summaries
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    const expensesByCategory = {};
+    const incomeByCategory = {};
+    
+    transactions.forEach(t => {
+        const cat = t.category_name || t.category || 'Uncategorized';
+        if (t.type === 'income') {
+            totalIncome += t.amount;
+            incomeByCategory[cat] = (incomeByCategory[cat] || 0) + t.amount;
+        } else {
+            totalExpenses += t.amount;
+            expensesByCategory[cat] = (expensesByCategory[cat] || 0) + t.amount;
+        }
+    });
+    
+    return {
+        totalIncome,
+        totalExpenses,
+        expensesByCategory,
+        incomeByCategory,
+        transactions
+    };
+}
+
+// Run comparison
+async function runComparison() {
+    const range1 = getComparePeriodRange(1);
+    const range2 = getComparePeriodRange(2);
+    
+    if (!range1 || !range2) {
+        alert('Please select valid date ranges for both periods');
+        return;
+    }
+    
+    const compareBtn = document.getElementById('csCompareBtn');
+    compareBtn.disabled = true;
+    compareBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Comparing...';
+    
+    try {
+        const [data1, data2] = await Promise.all([
+            fetchPeriodData(range1),
+            fetchPeriodData(range2)
+        ]);
+        
+        // Update labels
+        document.getElementById('csCompare1Label').textContent = range1.label;
+        document.getElementById('csCompare2Label').textContent = range2.label;
+        
+        // Update summary cards
+        document.getElementById('csCompare1Income').textContent = formatCurrency(data1.totalIncome);
+        document.getElementById('csCompare1Expenses').textContent = formatCurrency(data1.totalExpenses);
+        document.getElementById('csCompare1Net').textContent = formatCurrency(data1.totalIncome - data1.totalExpenses);
+        
+        document.getElementById('csCompare2Income').textContent = formatCurrency(data2.totalIncome);
+        document.getElementById('csCompare2Expenses').textContent = formatCurrency(data2.totalExpenses);
+        document.getElementById('csCompare2Net').textContent = formatCurrency(data2.totalIncome - data2.totalExpenses);
+        
+        // Calculate differences
+        const diffIncome = data2.totalIncome - data1.totalIncome;
+        const diffExpenses = data2.totalExpenses - data1.totalExpenses;
+        const diffNet = (data2.totalIncome - data2.totalExpenses) - (data1.totalIncome - data1.totalExpenses);
+        
+        document.getElementById('csCompareDiffIncome').textContent = (diffIncome >= 0 ? '+' : '') + formatCurrency(diffIncome);
+        document.getElementById('csCompareDiffExpenses').textContent = (diffExpenses >= 0 ? '+' : '') + formatCurrency(diffExpenses);
+        document.getElementById('csCompareDiffNet').textContent = (diffNet >= 0 ? '+' : '') + formatCurrency(diffNet);
+        
+        // Color the differences
+        document.getElementById('csCompareDiffIncome').style.color = diffIncome >= 0 ? '#27ae60' : '#e74c3c';
+        document.getElementById('csCompareDiffExpenses').style.color = diffExpenses <= 0 ? '#27ae60' : '#e74c3c';
+        document.getElementById('csCompareDiffNet').style.color = diffNet >= 0 ? '#27ae60' : '#e74c3c';
+        
+        // Generate charts
+        generateComparisonCharts(data1, data2, range1.label, range2.label);
+        
+        // Show results
+        document.getElementById('csComparisonResults').style.display = 'block';
+        
+    } catch (error) {
+        console.error('Error running comparison:', error);
+        alert('Error comparing periods: ' + error.message);
+    } finally {
+        compareBtn.disabled = false;
+        compareBtn.innerHTML = '<i class="fas fa-chart-bar"></i> Compare';
+    }
+}
+
+// Generate comparison charts
+function generateComparisonCharts(data1, data2, label1, label2) {
+    const chartType = document.getElementById('csCompareChartType')?.value || 'bar';
+    const viewMode = document.getElementById('csCompareViewMode')?.value || 'side-by-side';
+    
+    const colors1 = 'rgba(52, 152, 219, 0.7)';  // Blue with transparency
+    const colors2 = 'rgba(231, 76, 60, 0.7)';   // Red with transparency
+    const border1 = '#3498db';
+    const border2 = '#e74c3c';
+    
+    // Generate color palette for pie/doughnut/polar charts
+    const generateColors = (count) => {
+        const baseColors = [
+            '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
+            '#1abc9c', '#e67e22', '#34495e', '#16a085', '#c0392b',
+            '#27ae60', '#8e44ad', '#2980b9', '#d35400', '#7f8c8d'
+        ];
+        return baseColors.slice(0, count);
+    };
+    
+    // Get all unique categories
+    const allExpenseCategories = [...new Set([
+        ...Object.keys(data1.expensesByCategory),
+        ...Object.keys(data2.expensesByCategory)
+    ])].sort();
+    
+    const allIncomeCategories = [...new Set([
+        ...Object.keys(data1.incomeByCategory),
+        ...Object.keys(data2.incomeByCategory)
+    ])].sort();
+    
+    // Determine if chart type supports multiple datasets or needs separate charts
+    const isMultiDatasetType = ['bar', 'line', 'radar'].includes(chartType);
+    const isPieType = ['pie', 'doughnut', 'polarArea'].includes(chartType);
+    
+    // Build chart configuration based on type
+    const buildChartConfig = (type, labels, data1Arr, data2Arr, lab1, lab2, isOverlay) => {
+        const expenseColors = generateColors(labels.length);
+        
+        if (isPieType) {
+            // For pie/doughnut/polar, we need separate charts for each period
+            // In side-by-side, show period 1 data; overlay will show period 2
+            const dataArr = isOverlay ? data2Arr : data1Arr;
+            const label = isOverlay ? lab2 : lab1;
+            return {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: dataArr,
+                        backgroundColor: expenseColors.map(c => c + 'cc'),
+                        borderColor: expenseColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { 
+                        legend: { display: true, position: 'right' },
+                        title: { display: true, text: label }
+                    }
+                }
+            };
+        } else {
+            // Bar, line, radar - support multiple datasets
+            const config = {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: lab1,
+                            data: data1Arr,
+                            backgroundColor: isOverlay ? 'rgba(52, 152, 219, 0.5)' : colors1,
+                            borderColor: border1,
+                            borderWidth: type === 'line' ? 2 : 1,
+                            fill: type === 'line' || type === 'radar',
+                            tension: 0.4,
+                            // For overlay bar charts, both bars same size/position
+                            barPercentage: isOverlay && type === 'bar' ? 1.0 : 0.9,
+                            categoryPercentage: isOverlay && type === 'bar' ? 0.7 : 0.8,
+                            order: isOverlay && type === 'bar' ? 2 : 1  // Draw first (behind)
+                        },
+                        {
+                            label: lab2,
+                            data: data2Arr,
+                            backgroundColor: isOverlay ? 'rgba(231, 76, 60, 0.5)' : colors2,
+                            borderColor: border2,
+                            borderWidth: type === 'line' ? 2 : 1,
+                            fill: type === 'line' || type === 'radar',
+                            tension: 0.4,
+                            // For overlay bar charts, both bars same size/position
+                            barPercentage: isOverlay && type === 'bar' ? 1.0 : 0.9,
+                            categoryPercentage: isOverlay && type === 'bar' ? 0.7 : 0.8,
+                            order: isOverlay && type === 'bar' ? 1 : 2  // Draw second (in front)
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: true, position: 'top' } },
+                    scales: type === 'radar' ? {} : { y: { beginAtZero: true } }
+                }
+            };
+            return config;
+        }
+    };
+    
+    // Side by side expense chart
+    if (compareState.expenseChart) compareState.expenseChart.destroy();
+    const expenseCtx = document.getElementById('csCompareExpenseChart');
+    if (expenseCtx && allExpenseCategories.length > 0) {
+        const expData1 = allExpenseCategories.map(cat => data1.expensesByCategory[cat] || 0);
+        const expData2 = allExpenseCategories.map(cat => data2.expensesByCategory[cat] || 0);
+        compareState.expenseChart = new Chart(expenseCtx, 
+            buildChartConfig(chartType, allExpenseCategories, expData1, expData2, label1, label2, false)
+        );
+    }
+    
+    // Side by side income chart
+    if (compareState.incomeChart) compareState.incomeChart.destroy();
+    const incomeCtx = document.getElementById('csCompareIncomeChart');
+    if (incomeCtx && allIncomeCategories.length > 0) {
+        const incData1 = allIncomeCategories.map(cat => data1.incomeByCategory[cat] || 0);
+        const incData2 = allIncomeCategories.map(cat => data2.incomeByCategory[cat] || 0);
+        compareState.incomeChart = new Chart(incomeCtx,
+            buildChartConfig(chartType, allIncomeCategories, incData1, incData2, label1, label2, false)
+        );
+    }
+    
+    // Overlay expense chart
+    if (compareState.expenseOverlay) compareState.expenseOverlay.destroy();
+    const expenseOverlayCtx = document.getElementById('csCompareExpenseOverlay');
+    if (expenseOverlayCtx && allExpenseCategories.length > 0) {
+        const expData1 = allExpenseCategories.map(cat => data1.expensesByCategory[cat] || 0);
+        const expData2 = allExpenseCategories.map(cat => data2.expensesByCategory[cat] || 0);
+        compareState.expenseOverlay = new Chart(expenseOverlayCtx,
+            buildChartConfig(chartType, allExpenseCategories, expData1, expData2, label1, label2, true)
+        );
+    }
+    
+    // Overlay income chart
+    if (compareState.incomeOverlay) compareState.incomeOverlay.destroy();
+    const incomeOverlayCtx = document.getElementById('csCompareIncomeOverlay');
+    if (incomeOverlayCtx && allIncomeCategories.length > 0) {
+        const incData1 = allIncomeCategories.map(cat => data1.incomeByCategory[cat] || 0);
+        const incData2 = allIncomeCategories.map(cat => data2.incomeByCategory[cat] || 0);
+        compareState.incomeOverlay = new Chart(incomeOverlayCtx,
+            buildChartConfig(chartType, allIncomeCategories, incData1, incData2, label1, label2, true)
+        );
+    }
 }
 
 // File Upload Handling

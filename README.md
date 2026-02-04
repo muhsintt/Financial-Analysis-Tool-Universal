@@ -1,6 +1,6 @@
 # Expense Tracker - Financial Analysis Software
 
-A comprehensive, fully-functional expense tracking and budget management application built with Python Flask and modern web technologies.
+A comprehensive, fully-functional expense tracking and budget management application built with Python Flask and modern web technologies, with special support for the Bahá'í (Badí') calendar.
 
 ## Features
 
@@ -10,9 +10,13 @@ A comprehensive, fully-functional expense tracking and budget management applica
 ✅ **File Upload** - Import bank statements from CSV and Excel files
 ✅ **Auto-Categorization** - Automatic category detection for imported transactions
 ✅ **Reporting & Analytics** - Comprehensive reports with charts and trends
+✅ **Charts & Summaries** - Advanced reporting with multiple chart types and time frames
+✅ **Period Comparison** - Compare two time periods with overlay or side-by-side charts
+✅ **Bahá'í Calendar** - Full support for Badí' calendar months and years
 ✅ **Expense Exclusion** - Exclude transactions from reports and budgets
 ✅ **Local Database** - SQLite for secure local data storage
 ✅ **Responsive Design** - Works on desktop, tablet, and mobile devices
+✅ **User Authentication** - Secure login with superuser and standard roles
 
 ## System Requirements
 
@@ -120,6 +124,37 @@ File Requirements:
 2. **Spending Trends**: 6-month chart of expense trends
 3. **Budget vs Actual**: Compare budgeted amounts with actual spending
 4. **Category Breakdown**: Detailed breakdown of expenses by category
+
+### Charts & Summaries
+
+Access advanced reporting with the **"Charts & Summaries"** submenu under Reports:
+
+1. **Time Frame Selection**:
+   - Gregorian Month (e.g., January 2026)
+   - Gregorian Year (full year)
+   - Bahá'í Month (e.g., Bahá 182 BE)
+   - Bahá'í Year (Naw-Rúz to Naw-Rúz)
+   - Custom Date Range
+
+2. **Chart Types**: Choose from Bar, Line, Pie, Doughnut, Polar Area, or Radar
+
+3. **Summary Cards**: View totals for Income, Expenses, Net Balance, and Transaction Count
+
+4. **Print Options**: Click "Print" and choose Portrait or Landscape orientation
+
+### Period Comparison
+
+Compare two time periods side-by-side or overlaid:
+
+1. Scroll down to **"Period Comparison"** section
+2. **Period 1 & Period 2**: Select any two time frames (can mix Gregorian and Bahá'í)
+3. **Chart Type**: Choose visualization style (bar, line, pie, etc.)
+4. **View Mode**:
+   - **Side by Side**: Bars next to each other for easy comparison
+   - **Overlay**: Bars/lines overlapped with transparency (blue = Period 1, red = Period 2)
+5. Click **"Compare"** to generate charts
+6. View difference cards showing income, expense, and net changes
+7. Print results with Portrait or Landscape orientation
 
 ### Categorization Rules
 

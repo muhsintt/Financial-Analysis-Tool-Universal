@@ -326,7 +326,9 @@
                                 <label>Time Frame:</label>
                                 <select id="csTimeFrameType" class="form-control">
                                     <option value="gregorian-month">Gregorian Month</option>
+                                    <option value="gregorian-year">Gregorian Year</option>
                                     <option value="badi-month">Bahá'í Month</option>
+                                    <option value="badi-year">Bahá'í Year</option>
                                     <option value="custom">Custom Date Range</option>
                                 </select>
                             </div>
@@ -337,6 +339,12 @@
                                 <input type="month" id="csGregorianMonth" class="form-control">
                             </div>
                             
+                            <!-- Gregorian Year Selector -->
+                            <div class="cs-control-group" id="csGregorianYearSelector" style="display: none;">
+                                <label>Year:</label>
+                                <input type="number" id="csGregorianYear" class="form-control" min="1900" max="2100" style="width: 100px;">
+                            </div>
+                            
                             <!-- Bahá'í Month Selector -->
                             <div class="cs-control-group" id="csBadiSelector" style="display: none;">
                                 <label>Year:</label>
@@ -345,6 +353,12 @@
                                 <select id="csBadiMonth" class="form-control">
                                     <!-- Populated by JavaScript -->
                                 </select>
+                            </div>
+                            
+                            <!-- Bahá'í Year Selector -->
+                            <div class="cs-control-group" id="csBadiYearSelector" style="display: none;">
+                                <label>Year:</label>
+                                <input type="number" id="csBadiYearOnly" class="form-control" min="1" style="width: 100px;">
                             </div>
                             
                             <!-- Custom Date Range Selector -->
@@ -371,13 +385,18 @@
                                 <i class="fas fa-sync"></i> Generate
                             </button>
                             
-                            <div class="cs-print-controls">
-                                <button class="btn btn-secondary" id="csPrintPortraitBtn">
-                                    <i class="fas fa-print"></i> Print Portrait
+                            <div class="cs-print-dropdown">
+                                <button class="btn btn-secondary" id="csPrintBtn">
+                                    <i class="fas fa-print"></i> Print <i class="fas fa-caret-down"></i>
                                 </button>
-                                <button class="btn btn-secondary" id="csPrintLandscapeBtn">
-                                    <i class="fas fa-print"></i> Print Landscape
-                                </button>
+                                <div class="cs-print-menu" id="csPrintMenu">
+                                    <button class="cs-print-option" data-orientation="portrait">
+                                        <i class="fas fa-file"></i> Portrait
+                                    </button>
+                                    <button class="cs-print-option" data-orientation="landscape">
+                                        <i class="fas fa-file" style="transform: rotate(90deg);"></i> Landscape
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
@@ -429,6 +448,144 @@
                             <div class="cs-chart-container">
                                 <h3>Income Breakdown by Category</h3>
                                 <canvas id="csIncomeChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Comparison Section -->
+                        <div class="cs-comparison-section">
+                            <div class="cs-comparison-header">
+                                <h3><i class="fas fa-balance-scale"></i> Period Comparison</h3>
+                                <div class="cs-comparison-options">
+                                    <div class="cs-comparison-toggle">
+                                        <label>Chart Type:</label>
+                                        <select id="csCompareChartType" class="form-control">
+                                            <option value="bar">Bar Chart</option>
+                                            <option value="line">Line Chart</option>
+                                            <option value="pie">Pie Chart</option>
+                                            <option value="doughnut">Doughnut</option>
+                                            <option value="polarArea">Polar Area</option>
+                                            <option value="radar">Radar</option>
+                                        </select>
+                                    </div>
+                                    <div class="cs-comparison-toggle">
+                                        <label>View Mode:</label>
+                                        <select id="csCompareViewMode" class="form-control">
+                                            <option value="side-by-side">Side by Side</option>
+                                            <option value="overlay">Overlay</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="cs-comparison-controls no-print">
+                                <!-- Period 1 -->
+                                <div class="cs-period-selector">
+                                    <h4><span class="cs-period-badge period-1">Period 1</span></h4>
+                                    <div class="cs-period-row">
+                                        <select id="csCompare1Type" class="form-control">
+                                            <option value="gregorian-month">Gregorian Month</option>
+                                            <option value="gregorian-year">Gregorian Year</option>
+                                            <option value="badi-month">Bahá'í Month</option>
+                                            <option value="badi-year">Bahá'í Year</option>
+                                            <option value="custom">Custom Range</option>
+                                        </select>
+                                        <div class="cs-period-inputs" id="csCompare1Inputs">
+                                            <input type="month" id="csCompare1Month" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Period 2 -->
+                                <div class="cs-period-selector">
+                                    <h4><span class="cs-period-badge period-2">Period 2</span></h4>
+                                    <div class="cs-period-row">
+                                        <select id="csCompare2Type" class="form-control">
+                                            <option value="gregorian-month">Gregorian Month</option>
+                                            <option value="gregorian-year">Gregorian Year</option>
+                                            <option value="badi-month">Bahá'í Month</option>
+                                            <option value="badi-year">Bahá'í Year</option>
+                                            <option value="custom">Custom Range</option>
+                                        </select>
+                                        <div class="cs-period-inputs" id="csCompare2Inputs">
+                                            <input type="month" id="csCompare2Month" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button class="btn btn-primary" id="csCompareBtn">
+                                    <i class="fas fa-chart-bar"></i> Compare
+                                </button>
+                            </div>
+                            
+                            <!-- Comparison Charts -->
+                            <div class="cs-comparison-results" id="csComparisonResults" style="display: none;">
+                                <div class="cs-comparison-summary">
+                                    <div class="cs-compare-card period-1">
+                                        <h4 id="csCompare1Label">Period 1</h4>
+                                        <div class="cs-compare-stats">
+                                            <div><span>Income:</span> <strong id="csCompare1Income">$0.00</strong></div>
+                                            <div><span>Expenses:</span> <strong id="csCompare1Expenses">$0.00</strong></div>
+                                            <div><span>Net:</span> <strong id="csCompare1Net">$0.00</strong></div>
+                                        </div>
+                                    </div>
+                                    <div class="cs-compare-card period-2">
+                                        <h4 id="csCompare2Label">Period 2</h4>
+                                        <div class="cs-compare-stats">
+                                            <div><span>Income:</span> <strong id="csCompare2Income">$0.00</strong></div>
+                                            <div><span>Expenses:</span> <strong id="csCompare2Expenses">$0.00</strong></div>
+                                            <div><span>Net:</span> <strong id="csCompare2Net">$0.00</strong></div>
+                                        </div>
+                                    </div>
+                                    <div class="cs-compare-card difference">
+                                        <h4>Difference</h4>
+                                        <div class="cs-compare-stats">
+                                            <div><span>Income:</span> <strong id="csCompareDiffIncome">$0.00</strong></div>
+                                            <div><span>Expenses:</span> <strong id="csCompareDiffExpenses">$0.00</strong></div>
+                                            <div><span>Net:</span> <strong id="csCompareDiffNet">$0.00</strong></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Side by Side Charts -->
+                                <div class="cs-comparison-charts side-by-side" id="csCompareSideBySide">
+                                    <div class="cs-chart-container">
+                                        <h3>Expenses Comparison</h3>
+                                        <canvas id="csCompareExpenseChart"></canvas>
+                                    </div>
+                                    <div class="cs-chart-container">
+                                        <h3>Income Comparison</h3>
+                                        <canvas id="csCompareIncomeChart"></canvas>
+                                    </div>
+                                </div>
+                                
+                                <!-- Overlay Charts -->
+                                <div class="cs-comparison-charts overlay" id="csCompareOverlay" style="display: none;">
+                                    <div class="cs-chart-container full-width">
+                                        <h3>Expenses Comparison (Overlay)</h3>
+                                        <canvas id="csCompareExpenseOverlay"></canvas>
+                                    </div>
+                                    <div class="cs-chart-container full-width">
+                                        <h3>Income Comparison (Overlay)</h3>
+                                        <canvas id="csCompareIncomeOverlay"></canvas>
+                                    </div>
+                                </div>
+                                
+                                <!-- Print Button -->
+                                <div class="cs-print-section no-print">
+                                    <div class="cs-print-dropdown">
+                                        <button class="btn btn-secondary" id="csComparePrintBtn">
+                                            <i class="fas fa-print"></i> Print Comparison
+                                        </button>
+                                        <div class="cs-print-options" id="csComparePrintOptions">
+                                            <button class="btn btn-outline" onclick="printComparison('portrait')">
+                                                <i class="fas fa-file"></i> Portrait
+                                            </button>
+                                            <button class="btn btn-outline" onclick="printComparison('landscape')">
+                                                <i class="fas fa-file-alt"></i> Landscape
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         

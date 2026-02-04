@@ -2533,10 +2533,59 @@ body.read-only .toggle-section {
     min-width: 120px;
 }
 
-.cs-print-controls {
+/* Print Dropdown */
+.cs-print-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.cs-print-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    z-index: 1000;
+    min-width: 150px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+.cs-print-menu.show {
+    display: block;
+    animation: csFadeIn 0.2s ease;
+}
+
+@keyframes csFadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.cs-print-option {
     display: flex;
+    align-items: center;
     gap: 10px;
-    margin-left: auto;
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: #333;
+    transition: background 0.2s;
+}
+
+.cs-print-option:hover {
+    background: #f0f0f0;
+}
+
+.cs-print-option i {
+    color: #666;
+    width: 20px;
+    text-align: center;
 }
 
 /* Summary Cards */
@@ -2625,6 +2674,230 @@ body.read-only .toggle-section {
     max-height: 350px;
 }
 
+/* Comparison Section */
+.cs-comparison-section {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.cs-comparison-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.cs-comparison-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cs-comparison-header h3 i {
+    color: #3498db;
+}
+
+.cs-comparison-options {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.cs-comparison-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cs-comparison-toggle label {
+    font-weight: 500;
+    color: #666;
+    white-space: nowrap;
+}
+
+.cs-comparison-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+}
+
+.cs-period-selector {
+    flex: 1;
+    min-width: 250px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.cs-period-selector h4 {
+    margin: 0 0 10px;
+}
+
+.cs-period-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.cs-period-badge.period-1 {
+    background: rgba(52, 152, 219, 0.2);
+    color: #2980b9;
+}
+
+.cs-period-badge.period-2 {
+    background: rgba(231, 76, 60, 0.2);
+    color: #c0392b;
+}
+
+.cs-period-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.cs-period-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.cs-period-inputs input,
+.cs-period-inputs select {
+    min-width: 120px;
+}
+
+.cs-comparison-results {
+    margin-top: 20px;
+}
+
+.cs-comparison-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.cs-compare-card {
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid;
+}
+
+.cs-compare-card.period-1 {
+    background: rgba(52, 152, 219, 0.1);
+    border-color: #3498db;
+}
+
+.cs-compare-card.period-2 {
+    background: rgba(231, 76, 60, 0.1);
+    border-color: #e74c3c;
+}
+
+.cs-compare-card.difference {
+    background: rgba(155, 89, 182, 0.1);
+    border-color: #9b59b6;
+}
+
+.cs-compare-card h4 {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+    color: #333;
+}
+
+.cs-compare-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.cs-compare-stats div {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+}
+
+.cs-compare-stats span {
+    color: #666;
+}
+
+.cs-compare-stats strong {
+    color: #333;
+}
+
+.cs-comparison-charts {
+    display: grid;
+    gap: 20px;
+}
+
+.cs-comparison-charts.side-by-side {
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+}
+
+.cs-comparison-charts.overlay {
+    grid-template-columns: 1fr;
+}
+
+.cs-chart-container.full-width {
+    grid-column: 1 / -1;
+}
+
+/* Comparison Print Section */
+.cs-print-section {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.cs-print-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.cs-print-options {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    padding: 8px;
+    z-index: 100;
+    min-width: 150px;
+    margin-top: 5px;
+}
+
+.cs-print-options.show {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.cs-print-options .btn {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 8px 12px;
+}
+
+.cs-print-options .btn i {
+    margin-right: 8px;
+}
+
 /* Tables Section */
 .cs-tables-section {
     display: grid;
@@ -2708,6 +2981,37 @@ body.read-only .toggle-section {
 .cs-print-header p {
     margin: 5px 0;
     color: #666;
+}
+
+/* Notification banner */
+.cs-notification {
+    display: none;
+    padding: 15px 20px;
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    color: white;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-weight: 500;
+    box-shadow: 0 2px 10px rgba(39, 174, 96, 0.3);
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.cs-notification.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Preview container for print */
+.cs-preview-badge {
+    display: inline-block;
+    background: #3498db;
+    color: white;
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin-bottom: 15px;
 }
 
 /* Print-only class */
