@@ -17,6 +17,8 @@ docker-compose down
 
 The application will be available at: **http://localhost:5000**
 
+With HTTPS enabled: **https://localhost:5443**
+
 ### Build and run with Docker only
 
 ```bash
@@ -40,6 +42,9 @@ docker run -d \
 |----------|-------------|---------|
 | `SECRET_KEY` | Flask session secret key | `change-me-in-production` |
 | `FLASK_ENV` | Environment mode | `production` |
+| `SSL_ENABLED` | Enable HTTPS | `false` |
+| `SSL_CERT_FILE` | Path to SSL certificate | `/app/certs/cert.pem` |
+| `SSL_KEY_FILE` | Path to SSL private key | `/app/certs/key.pem` |
 
 ### Production Setup
 
@@ -63,6 +68,61 @@ docker run -d \
 
 The following directories are mounted as volumes to persist data:
 
+- `./certs` → `/app/certs` (SSL certificates)
+
+## HTTPS / SSL Configuration
+
+### Option 1: Auto-generated Self-Signed Certificate (Development)
+
+Enable SSL and let the container generate a self-signed certificate:
+
+```bash
+# In .env file
+SSL_ENABLED=true
+```
+
+```bash
+docker-compose up -d --build
+```
+
+Access the app at: **https://localhost:5443**
+
+> ⚠️ Your browser will show a security warning for self-signed certificates. This is expected for development.
+
+### Option 2: Your Own Certificates (Production)
+
+1. Place your certificates in the `./certs` directory:
+   ```
+   ./certs/cert.pem    # Your SSL certificate
+   ./certs/key.pem     # Your private key
+   ```
+
+2. Enable SSL in `.env`:
+   ```bash
+   SSL_ENABLED=true
+   ```
+
+3. Start the container:
+   ```bash
+   docker-compose up -d --build
+   ```
+
+### Option 3: Let's Encrypt (Production)
+
+```bash
+# Generate certificate with certbot
+certbot certonly --standalone -d yourdomain.com
+
+# Copy to certs directory
+cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ./certs/cert.pem
+cp /etc/letsencrypt/live/yourdomain.com/privkey.pem ./certs/key.pem
+
+# Enable SSL
+echo "SSL_ENABLED=true" >> .env
+
+# Start container
+docker-compose up -d --build
+```
 - `./data` → `/app/backend/data` (SQLite database)
 - `./uploads` → `/app/backend/uploads` (Uploaded files)
 
