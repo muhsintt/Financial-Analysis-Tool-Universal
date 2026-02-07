@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
+*.egg-info
+dist/
+build/
+
+# Local data (will be mounted as volumes)
+backend/data/*.db
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Documentation
+*.md
+!README.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# Development scripts
+verify_setup.bat
+verify_setup.sh
+start.bat
+start.sh

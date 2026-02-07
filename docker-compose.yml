@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  financial-analysis-tool:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financial-analysis-tool
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persist database and uploads
+      - ./data:/app/backend/data
+      - ./uploads:/app/backend/uploads
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  data:
+  uploads:
