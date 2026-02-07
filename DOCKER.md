@@ -1,38 +1,54 @@
 # Docker Deployment Guide
 
+## Architecture
+
+This setup uses **NGINX as a reverse proxy** to handle SSL/HTTPS, providing:
+- Better security (SSL termination at NGINX)
+- Better performance (static file caching, connection handling)
+- Standard ports (80 for HTTP, 443 for HTTPS)
+- Automatic HTTP to HTTPS redirect
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │              Docker Network             │
+Internet ──────────►│                                         │
+   :80/:443         │  ┌─────────┐         ┌──────────────┐  │
+                    │  │  NGINX  │────────►│  Flask App   │  │
+                    │  │ :80/:443│  :5000  │  (Gunicorn)  │  │
+                    │  └─────────┘         └──────────────┘  │
+                    │       │                     │          │
+                    │       ▼                     ▼          │
+                    │   ./certs/          ./data/ ./uploads/ │
+                    └─────────────────────────────────────────┘
+```
+
 ## Quick Start
 
-### Build and run with Docker Compose (Recommended)
+### HTTP Only (Development)
 
 ```bash
-# Build and start the container
-docker-compose up -d --build
+# Build and start
+docker compose up -d --build
 
 # View logs
-docker-compose logs -f
-
-# Stop the container
-docker-compose down
+docker compose logs -f
 ```
 
-The application will be available at: **http://localhost:5000**
+Access at: **http://localhost** (port 80)
 
-With HTTPS enabled: **https://localhost:5443**
-
-### Build and run with Docker only
+### HTTPS with Self-Signed Certificate
 
 ```bash
-# Build the image
-docker build -t financial-analysis-tool .
+# Create .env file with SSL enabled
+echo "SSL_ENABLED=true" > .env
 
-# Run the container
-docker run -d \
-  --name financial-analysis-tool \
-  -p 5000:5000 \
-  -v $(pwd)/data:/app/backend/data \
-  -v $(pwd)/uploads:/app/backend/uploads \
-  financial-analysis-tool
+# Build and start
+docker compose up -d --build
 ```
+
+Access at: **https://localhost** (port 443)
+
+> ⚠️ Your browser will show a security warning for self-signed certificates. This is expected for development.
 
 ## Configuration
 
@@ -42,9 +58,7 @@ docker run -d \
 |----------|-------------|---------|
 | `SECRET_KEY` | Flask session secret key | `change-me-in-production` |
 | `FLASK_ENV` | Environment mode | `production` |
-| `SSL_ENABLED` | Enable HTTPS | `false` |
-| `SSL_CERT_FILE` | Path to SSL certificate | `/app/certs/cert.pem` |
-| `SSL_KEY_FILE` | Path to SSL private key | `/app/certs/key.pem` |
+| `SSL_ENABLED` | Enable HTTPS via NGINX | `false` |
 
 ### Production Setup
 
@@ -59,35 +73,39 @@ docker run -d \
    python -c "import secrets; print(secrets.token_hex(32))"
    ```
 
-3. Start the container:
+3. Enable SSL:
    ```bash
-   docker-compose up -d --build
+   SSL_ENABLED=true
+   ```
+
+4. Start the containers:
+   ```bash
+   docker compose up -d --build
    ```
 
 ## Data Persistence
 
-The following directories are mounted as volumes to persist data:
+The following directories are mounted as volumes:
 
-- `./certs` → `/app/certs` (SSL certificates)
+| Local Path | Container Path | Purpose |
+|------------|----------------|---------|
+| `./data` | `/app/backend/data` | SQLite database |
+| `./uploads` | `/app/backend/uploads` | Uploaded files |
+| `./certs` | `/etc/nginx/ssl` | SSL certificates |
 
-## HTTPS / SSL Configuration
+## SSL/HTTPS Configuration
 
 ### Option 1: Auto-generated Self-Signed Certificate (Development)
 
-Enable SSL and let the container generate a self-signed certificate:
+Simply enable SSL - certificates are generated automatically:
 
 ```bash
 # In .env file
 SSL_ENABLED=true
+
+# Rebuild
+docker compose up -d --build
 ```
-
-```bash
-docker-compose up -d --build
-```
-
-Access the app at: **https://localhost:5443**
-
-> ⚠️ Your browser will show a security warning for self-signed certificates. This is expected for development.
 
 ### Option 2: Your Own Certificates (Production)
 
@@ -102,73 +120,125 @@ Access the app at: **https://localhost:5443**
    SSL_ENABLED=true
    ```
 
-3. Start the container:
+3. Start the containers:
    ```bash
-   docker-compose up -d --build
+   docker compose up -d --build
    ```
 
 ### Option 3: Let's Encrypt (Production)
 
 ```bash
 # Generate certificate with certbot
-certbot certonly --standalone -d yourdomain.com
+sudo certbot certonly --standalone -d yourdomain.com
 
 # Copy to certs directory
-cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ./certs/cert.pem
-cp /etc/letsencrypt/live/yourdomain.com/privkey.pem ./certs/key.pem
+sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ./certs/cert.pem
+sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem ./certs/key.pem
+
+# Set permissions
+sudo chown $USER:$USER ./certs/*.pem
 
 # Enable SSL
 echo "SSL_ENABLED=true" >> .env
 
-# Start container
-docker-compose up -d --build
+# Start containers
+docker compose up -d --build
 ```
-- `./data` → `/app/backend/data` (SQLite database)
-- `./uploads` → `/app/backend/uploads` (Uploaded files)
 
 ## Useful Commands
 
 ```bash
 # View container status
-docker-compose ps
+docker compose ps
 
-# View logs
-docker-compose logs -f financial-analysis-tool
+# View all logs
+docker compose logs -f
 
-# Restart the container
-docker-compose restart
+# View NGINX logs only
+docker compose logs -f nginx
+
+# View App logs only
+docker compose logs -f app
+
+# Restart all containers
+docker compose restart
 
 # Stop and remove containers
-docker-compose down
+docker compose down
 
 # Rebuild after code changes
-docker-compose up -d --build
+docker compose up -d --build
 
-# Enter the container shell
-docker-compose exec financial-analysis-tool /bin/bash
+# Enter the app container shell
+docker compose exec app /bin/bash
+
+# Enter the nginx container shell
+docker compose exec nginx /bin/sh
 
 # Check container health
-docker inspect --format='{{.State.Health.Status}}' financial-analysis-tool
+docker inspect --format='{{.State.Health.Status}}' financial-analysis-app
 ```
 
 ## Troubleshooting
 
-### Container won't start
+### Containers won't start
+
 Check the logs for errors:
 ```bash
-docker-compose logs financial-analysis-tool
+docker compose logs
 ```
+
+### NGINX won't start (SSL enabled)
+
+Check if certificates exist and are readable:
+```bash
+ls -la ./certs/
+```
+
+### Cannot access the application
+
+1. Check if containers are running:
+   ```bash
+   docker compose ps
+   ```
+
+2. Check NGINX logs:
+   ```bash
+   docker compose logs nginx
+   ```
+
+3. Verify ports are not in use:
+   ```bash
+   netstat -an | findstr :80
+   netstat -an | findstr :443
+   ```
 
 ### Database issues
-The SQLite database is stored in the `./data` directory. To reset:
+
+The SQLite database is stored in `./data`. To reset:
 ```bash
-docker-compose down
+docker compose down
 rm -rf ./data/*.db
-docker-compose up -d
+docker compose up -d
 ```
 
-### Permission issues
-Ensure the data and uploads directories are writable:
+### Permission issues (Linux/Mac)
+
+Ensure directories are writable:
 ```bash
-chmod -R 777 ./data ./uploads
+chmod -R 755 ./data ./uploads ./certs
 ```
+
+## Ports
+
+| Port | Protocol | When |
+|------|----------|------|
+| 80 | HTTP | Always (redirects to HTTPS when SSL enabled) |
+| 443 | HTTPS | When `SSL_ENABLED=true` |
+
+## Security Notes
+
+- The Flask app runs as a non-root user inside the container
+- NGINX handles all external traffic and SSL termination
+- Internal communication between NGINX and Flask uses HTTP on an isolated Docker network
+- Security headers (HSTS, X-Frame-Options, etc.) are set by NGINX

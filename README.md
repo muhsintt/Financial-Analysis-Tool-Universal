@@ -30,7 +30,7 @@ A comprehensive, fully-functional expense tracking and budget management applica
 
 ### Option 1: Docker (Recommended)
 
-The easiest way to run the application is with Docker:
+The easiest way to run the application is with Docker (uses NGINX as reverse proxy):
 
 ```bash
 # Clone the repository
@@ -38,10 +38,10 @@ git clone https://github.com/muhsintt/Financial-Analysis-Tool.git
 cd Financial-Analysis-Tool
 
 # Build and run with Docker Compose
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-The application will be available at: **http://localhost:5000**
+The application will be available at: **http://localhost** (port 80)
 
 #### Enable HTTPS (Optional)
 
@@ -50,10 +50,10 @@ The application will be available at: **http://localhost:5000**
 echo "SSL_ENABLED=true" > .env
 
 # Rebuild and run
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-With HTTPS enabled: **https://localhost:5443** (auto-generates self-signed certificate)
+With HTTPS enabled: **https://localhost** (port 443, auto-generates self-signed certificate)
 
 For full Docker documentation, see [DOCKER.md](DOCKER.md).
 
@@ -233,31 +233,36 @@ expense_tracker/
 │   ├── categorization_rules_sample.json
 │   ├── categorization_rules_sample.yaml
 │   └── categorization_rules_sample.csv
+├── nginx/                   # NGINX reverse proxy (Docker)
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   └── docker-entrypoint.sh
 ├── certs/                   # SSL certificates (Docker)
 ├── Dockerfile              # Docker build instructions
 ├── docker-compose.yml      # Docker Compose configuration
-├── docker-entrypoint.sh    # Docker startup script
 ├── DOCKER.md               # Docker documentation
 ├── start.bat               # Windows startup script
 ├── start.sh                # Mac/Linux startup script
-└── Docker Issues
+└── README.md               # This file
+```
+
+## Troubleshooting
+
+### Docker Issues
 
 **Container won't start:**
 ```bash
-docker-compose logs financial-analysis-tool
+docker compose logs
 ```
 
 **Reset everything:**
 ```bash
-docker-compose down
+docker compose down
 rm -rf ./data/*.db
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-### README.md               # This file
-```
-
-## Troubleshooting
+### Application won't start
 
 ### Application won't start
 

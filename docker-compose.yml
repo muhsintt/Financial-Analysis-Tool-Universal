@@ -1,27 +1,19 @@
 version: '3.8'
 
 services:
-  financial-analysis-tool:
+  # Flask Application
+  app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: financial-analysis-tool
-    ports:
-      - "5000:5000"    # HTTP
-      - "5443:5443"    # HTTPS
+    container_name: financial-analysis-app
     volumes:
       # Persist database and uploads
       - ./data:/app/backend/data
       - ./uploads:/app/backend/uploads
-      # SSL certificates - if empty, self-signed certs will be generated
-      - ./certs:/app/certs:rw
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
-      # Set to 'true' to enable HTTPS with auto-generated self-signed certs
-      - SSL_ENABLED=${SSL_ENABLED:-false}
-      - SSL_CERT_FILE=${SSL_CERT_FILE:-/app/certs/cert.pem}
-      - SSL_KEY_FILE=${SSL_KEY_FILE:-/app/certs/key.pem}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/status')"]
@@ -29,6 +21,35 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      - app-network
+
+  # NGINX Reverse Proxy (handles SSL/HTTPS)
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: financial-analysis-nginx
+    ports:
+      - "80:80"      # HTTP
+      - "443:443"    # HTTPS
+    volumes:
+      # SSL certificates - mount your own or let it auto-generate
+      - ./certs:/etc/nginx/ssl:rw
+      # Static files for better performance (optional)
+      - ./frontend/static:/app/frontend/static:ro
+    environment:
+      # Set to 'true' to enable HTTPS with auto-generated self-signed certs
+      - SSL_ENABLED=${SSL_ENABLED:-false}
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   data:
