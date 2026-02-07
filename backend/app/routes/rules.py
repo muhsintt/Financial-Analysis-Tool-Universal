@@ -3,10 +3,12 @@ from app import db
 from app.models.categorization_rule import CategorizationRule
 from app.models.category import Category
 from app.models.transaction import Transaction
+from app.routes.auth import write_required
 
 rules_bp = Blueprint('rules', __name__, url_prefix='/api/rules')
 
 @rules_bp.route('/apply', methods=['POST'])
+@write_required
 def apply_rules():
     """Apply all active rules to existing transactions"""
     # Get all active rules ordered by priority
@@ -64,6 +66,7 @@ def get_rule(id):
     return jsonify(rule.to_dict())
 
 @rules_bp.route('/', methods=['POST'])
+@write_required
 def create_rule():
     """Create a new categorization rule"""
     data = request.get_json()
@@ -96,6 +99,7 @@ def create_rule():
     return jsonify(rule.to_dict()), 201
 
 @rules_bp.route('/<int:id>', methods=['PUT'])
+@write_required
 def update_rule(id):
     """Update a categorization rule"""
     rule = CategorizationRule.query.get_or_404(id)
@@ -128,6 +132,7 @@ def update_rule(id):
     return jsonify(rule.to_dict())
 
 @rules_bp.route('/<int:id>', methods=['DELETE'])
+@write_required
 def delete_rule(id):
     """Delete a categorization rule"""
     rule = CategorizationRule.query.get_or_404(id)
@@ -170,6 +175,7 @@ def test_rule():
     })
 
 @rules_bp.route('/bulk-import', methods=['POST'])
+@write_required
 def bulk_import_rules():
     """Bulk import categorization rules from a list"""
     data = request.get_json()
@@ -249,6 +255,7 @@ def export_rules():
     })
 
 @rules_bp.route('/import', methods=['POST'])
+@write_required
 def import_rules():
     """Import rules from JSON, matching categories by name"""
     data = request.get_json()

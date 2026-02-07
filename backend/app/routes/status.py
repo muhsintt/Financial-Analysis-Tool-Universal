@@ -3,6 +3,7 @@ from app import db
 from app.models.api_status import ApiStatus
 from app.models.activity_log import ActivityLog
 from app.models.log_settings import LogSettings
+from app.routes.auth import write_required
 from datetime import datetime
 import json
 
@@ -45,6 +46,7 @@ def get_status():
     return jsonify(status.to_dict())
 
 @status_bp.route('/toggle', methods=['POST'])
+@write_required
 def toggle_api():
     """Toggle API on/off"""
     status = get_or_create_api_status()
@@ -71,6 +73,7 @@ def toggle_api():
     }), 200
 
 @status_bp.route('/set', methods=['POST'])
+@write_required
 def set_status():
     """Set API status to specific state"""
     status = get_or_create_api_status()

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models.budget import Budget
 from app.models.category import Category
+from app.routes.auth import write_required
 from datetime import datetime, date
 
 budgets_bp = Blueprint('budgets', __name__, url_prefix='/api/budgets')
@@ -23,6 +24,7 @@ def get_budgets():
     return jsonify([b.to_dict() for b in budgets])
 
 @budgets_bp.route('/', methods=['POST'])
+@write_required
 def create_budget():
     """Create a new budget"""
     data = request.get_json()
@@ -60,6 +62,7 @@ def get_budget(id):
     return jsonify(budget.to_dict())
 
 @budgets_bp.route('/<int:id>', methods=['PUT'])
+@write_required
 def update_budget(id):
     """Update a budget"""
     budget = Budget.query.get_or_404(id)
@@ -76,6 +79,7 @@ def update_budget(id):
     return jsonify(budget.to_dict())
 
 @budgets_bp.route('/<int:id>', methods=['DELETE'])
+@write_required
 def delete_budget(id):
     """Delete a budget"""
     budget = Budget.query.get_or_404(id)

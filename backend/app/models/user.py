@@ -5,6 +5,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 class User(db.Model):
     __tablename__ = 'users'
     
+    # Role options
+    ROLE_SUPERUSER = 'superuser'
+    ROLE_STANDARD = 'standard'
+    ROLE_VIEWER = 'viewer'
+    ROLE_CHOICES = [ROLE_SUPERUSER, ROLE_STANDARD, ROLE_VIEWER]
+    
     # Calendar preference options
     CALENDAR_BOTH = 'both'
     CALENDAR_GREGORIAN = 'gregorian'
@@ -14,7 +20,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default='standard')  # 'superuser' or 'standard'
+    role = db.Column(db.String(20), nullable=False, default='standard')  # 'superuser', 'standard', or 'viewer'
     is_default = db.Column(db.Boolean, default=False)  # True for the default admin user
     calendar_preference = db.Column(db.String(20), nullable=False, default='both')  # 'both', 'gregorian', or 'badi'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -34,6 +40,14 @@ class User(db.Model):
     def is_superuser(self):
         """Check if user has superuser role"""
         return self.role == 'superuser'
+    
+    def is_viewer(self):
+        """Check if user has viewer (read-only) role"""
+        return self.role == 'viewer'
+    
+    def can_write(self):
+        """Check if user can write/modify data (superuser and standard users)"""
+        return self.role in ['superuser', 'standard']
     
     def can_modify(self):
         """Check if user can modify data (only superusers)"""

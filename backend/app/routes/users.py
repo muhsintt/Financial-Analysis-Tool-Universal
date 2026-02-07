@@ -79,8 +79,8 @@ def create_user():
     if len(password) < 4:
         return jsonify({'error': 'Password must be at least 4 characters'}), 400
     
-    if role not in ['superuser', 'standard']:
-        return jsonify({'error': 'Role must be superuser or standard'}), 400
+    if role not in User.ROLE_CHOICES:
+        return jsonify({'error': 'Role must be superuser, standard, or viewer'}), 400
     
     if calendar_preference not in User.CALENDAR_CHOICES:
         return jsonify({'error': 'Calendar preference must be both, gregorian, or badi'}), 400
@@ -131,8 +131,8 @@ def update_user(id):
         user.username = new_username
     
     if 'role' in data:
-        if data['role'] not in ['superuser', 'standard']:
-            return jsonify({'error': 'Role must be superuser or standard'}), 400
+        if data['role'] not in User.ROLE_CHOICES:
+            return jsonify({'error': 'Role must be superuser, standard, or viewer'}), 400
         # Cannot change role of default admin
         if user.is_default:
             return jsonify({'error': 'Cannot change the role of the default admin'}), 400

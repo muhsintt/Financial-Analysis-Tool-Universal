@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models.category import Category
+from app.routes.auth import write_required
 from datetime import datetime
 
 categories_bp = Blueprint('categories', __name__, url_prefix='/api/categories')
@@ -65,6 +66,7 @@ def get_categories_by_type(type):
     return jsonify([cat.to_dict(include_subcategories=include_subs) for cat in categories])
 
 @categories_bp.route('/', methods=['POST'])
+@write_required
 def create_category():
     """Create a new category or subcategory"""
     data = request.get_json()
@@ -111,6 +113,7 @@ def create_category():
     return jsonify(category.to_dict()), 201
 
 @categories_bp.route('/<int:id>', methods=['PUT'])
+@write_required
 def update_category(id):
     """Update a category"""
     category = Category.query.get_or_404(id)
@@ -131,6 +134,7 @@ def update_category(id):
     return jsonify(category.to_dict())
 
 @categories_bp.route('/<int:id>/set-default', methods=['POST'])
+@write_required
 def set_default_category(id):
     """Set a category as the default for its type"""
     category = Category.query.get_or_404(id)
@@ -148,6 +152,7 @@ def set_default_category(id):
     })
 
 @categories_bp.route('/<int:id>', methods=['DELETE'])
+@write_required
 def delete_category(id):
     """Delete a category and reassign its transactions to the default/parent category"""
     from app.models.transaction import Transaction
@@ -218,6 +223,7 @@ def delete_category(id):
     }), 200
 
 @categories_bp.route('/init', methods=['POST'])
+@write_required
 def initialize_categories():
     """Initialize default categories"""
     created = []

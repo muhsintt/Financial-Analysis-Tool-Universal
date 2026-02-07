@@ -1753,6 +1753,11 @@ input:checked + .slider:before {
     color: var(--primary);
 }
 
+.role-badge.viewer {
+    background: #fff3e0;
+    color: #e65100;
+}
+
 .user-dropdown hr {
     border: none;
     border-top: 1px solid #eee;

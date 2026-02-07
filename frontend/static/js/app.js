@@ -437,8 +437,8 @@ function showMainApp() {
     // Update user display
     updateUserDisplay();
     
-    // Apply read-only mode if standard user
-    if (state.currentUser && state.currentUser.role === 'standard') {
+    // Apply read-only mode if viewer user
+    if (state.currentUser && state.currentUser.role === 'viewer') {
         document.body.classList.add('read-only');
     } else {
         document.body.classList.remove('read-only');
@@ -457,6 +457,49 @@ function showMainApp() {
  */
 function applyCalendarPreference(preference = null) {
     const calendarPref = preference || (state.currentUser && state.currentUser.calendar_preference) || 'both';
+    
+    // Apply to the main calendar type selector in the header
+    const calendarTypeSelect = document.getElementById('calendarTypeSelect');
+    if (calendarTypeSelect) {
+        const gregorianOption = calendarTypeSelect.querySelector('option[value="gregorian"]');
+        const badiOption = calendarTypeSelect.querySelector('option[value="badi"]');
+        
+        if (calendarPref === 'gregorian') {
+            // Hide Badí' option, force Gregorian
+            if (badiOption) {
+                badiOption.style.display = 'none';
+                badiOption.disabled = true;
+            }
+            if (gregorianOption) {
+                gregorianOption.style.display = '';
+                gregorianOption.disabled = false;
+            }
+            calendarTypeSelect.value = 'gregorian';
+            toggleCalendarType('gregorian');
+        } else if (calendarPref === 'badi') {
+            // Hide Gregorian option, force Badí'
+            if (gregorianOption) {
+                gregorianOption.style.display = 'none';
+                gregorianOption.disabled = true;
+            }
+            if (badiOption) {
+                badiOption.style.display = '';
+                badiOption.disabled = false;
+            }
+            calendarTypeSelect.value = 'badi';
+            toggleCalendarType('badi');
+        } else {
+            // Show both options
+            if (gregorianOption) {
+                gregorianOption.style.display = '';
+                gregorianOption.disabled = false;
+            }
+            if (badiOption) {
+                badiOption.style.display = '';
+                badiOption.disabled = false;
+            }
+        }
+    }
     
     // All time frame type selectors in the application
     const timeFrameSelectors = [
@@ -513,7 +556,8 @@ function updateUserDisplay() {
         document.getElementById('dropdownUsername').textContent = state.currentUser.username;
         
         const roleBadge = document.getElementById('dropdownRole');
-        roleBadge.textContent = state.currentUser.role === 'superuser' ? 'Super User' : 'Standard';
+        const roleLabels = {'superuser': 'Super User', 'standard': 'Standard', 'viewer': 'Viewer'};
+        roleBadge.textContent = roleLabels[state.currentUser.role] || state.currentUser.role;
         roleBadge.className = 'role-badge ' + state.currentUser.role;
     }
 }
@@ -4105,7 +4149,7 @@ function renderUsersTable(users) {
                 ${user.is_default ? '<span class="default-badge">Default Admin</span>' : ''}
             </td>
             <td class="role-cell">
-                <span class="role-badge ${user.role}">${user.role === 'superuser' ? 'Super User' : 'Standard'}</span>
+                <span class="role-badge ${user.role}">${{'superuser': 'Super User', 'standard': 'Standard', 'viewer': 'Viewer'}[user.role] || user.role}</span>
             </td>
             <td class="calendar-cell">
                 <span class="calendar-badge ${user.calendar_preference || 'both'}">${calendarLabels[user.calendar_preference] || 'Both'}</span>

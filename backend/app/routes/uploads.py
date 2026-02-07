@@ -5,6 +5,7 @@ from app.models.category import Category
 from app.models.upload import Upload
 from app.models.activity_log import ActivityLog
 from app.models.log_settings import LogSettings
+from app.routes.auth import write_required
 from app.utils.file_processor import process_excel_file, process_csv_file
 from datetime import datetime
 import os
@@ -100,6 +101,7 @@ def download_upload_transactions(upload_id):
     )
 
 @uploads_bp.route('/<int:upload_id>', methods=['DELETE'])
+@write_required
 def delete_upload(upload_id):
     """Delete an upload and all its related transactions"""
     upload = Upload.query.get_or_404(upload_id)
@@ -126,6 +128,7 @@ def delete_upload(upload_id):
     })
 
 @uploads_bp.route('/upload', methods=['POST'])
+@write_required
 def upload_file():
     """Upload and process a bank statement file"""
     if 'file' not in request.files:

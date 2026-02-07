@@ -51,6 +51,19 @@ def superuser_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def write_required(f):
+    """Decorator to require write access (blocks viewer role)"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'error': 'Authentication required', 'authenticated': False}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or not user.can_write():
+            return jsonify({'error': 'Write access required. Viewer role is read-only.', 'authorized': False}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
 def get_current_user():
     """Get the currently logged in user"""
     if 'user_id' in session:

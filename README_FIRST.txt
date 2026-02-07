@@ -2,7 +2,7 @@
 
 # EXPENSE TRACKER - START HERE
 
-## Quick Start (2 Steps)
+## Quick Start (2 Steps) #
 
 ### Step 1: Install Python
 Visit https://www.python.org/downloads/ and install Python 3.8 or higher.

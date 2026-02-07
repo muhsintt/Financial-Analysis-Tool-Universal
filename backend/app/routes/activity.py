@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify, send_file, session
 from app import db
 from app.models.activity_log import ActivityLog
 from app.models.log_settings import LogSettings
+from app.routes.auth import write_required, superuser_required
 from datetime import datetime, timedelta
 import csv
 import json
@@ -127,6 +128,7 @@ def get_stats():
     })
 
 @bp.route('/clear', methods=['DELETE'])
+@superuser_required
 def clear_old_activities():
     """Clear activities older than specified days (default 90)"""
     days = request.args.get('days', 90, type=int)
@@ -153,6 +155,7 @@ def get_log_settings():
     return jsonify(settings.to_dict())
 
 @bp.route('/settings', methods=['PUT'])
+@superuser_required
 def update_log_settings():
     """Update log settings"""
     data = request.get_json()
@@ -344,6 +347,7 @@ def export_txt(logs, timestamp):
     )
 
 @bp.route('/save-to-file', methods=['POST'])
+@superuser_required
 def save_logs_to_file():
     """Save logs to configured file destination"""
     settings = LogSettings.get_settings()
@@ -441,6 +445,7 @@ def save_to_nfs(logs, settings, timestamp):
     })
 
 @bp.route('/test-destination', methods=['POST'])
+@superuser_required
 def test_destination():
     """Test log destination connectivity"""
     settings = LogSettings.get_settings()

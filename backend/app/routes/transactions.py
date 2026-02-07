@@ -4,6 +4,7 @@ from app.models.transaction import Transaction
 from app.models.category import Category
 from app.models.activity_log import ActivityLog
 from app.models.log_settings import LogSettings
+from app.routes.auth import write_required
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_
 import json
@@ -66,6 +67,7 @@ def get_transaction(id):
     return jsonify(transaction.to_dict())
 
 @transactions_bp.route('/', methods=['POST'])
+@write_required
 def create_transaction():
     """Create a new transaction"""
     data = request.get_json()
@@ -104,6 +106,7 @@ def create_transaction():
     return jsonify(transaction.to_dict()), 201
 
 @transactions_bp.route('/<int:id>', methods=['PUT'])
+@write_required
 def update_transaction(id):
     """Update a transaction"""
     transaction = Transaction.query.get_or_404(id)
@@ -139,6 +142,7 @@ def update_transaction(id):
     return jsonify(transaction.to_dict())
 
 @transactions_bp.route('/<int:id>', methods=['DELETE'])
+@write_required
 def delete_transaction(id):
     """Delete a transaction"""
     transaction = Transaction.query.get_or_404(id)
@@ -157,6 +161,7 @@ def delete_transaction(id):
     return jsonify({'message': 'Transaction deleted'}), 204
 
 @transactions_bp.route('/exclude/<int:id>', methods=['PUT'])
+@write_required
 def toggle_exclude(id):
     """Toggle exclude status of a transaction"""
     transaction = Transaction.query.get_or_404(id)
@@ -165,6 +170,7 @@ def toggle_exclude(id):
     return jsonify(transaction.to_dict())
 
 @transactions_bp.route('/category/<int:category_id>', methods=['PUT'])
+@write_required
 def change_category(category_id):
     """Change category for multiple transactions"""
     data = request.get_json()
@@ -187,6 +193,7 @@ def change_category(category_id):
     return jsonify({'message': f'{count} transactions updated'})
 
 @transactions_bp.route('/bulk-update/', methods=['PUT'])
+@write_required
 def bulk_update():
     """Bulk update transactions (category or other fields)"""
     data = request.get_json()
@@ -228,6 +235,7 @@ def bulk_update():
     })
 
 @transactions_bp.route('/bulk-delete/', methods=['DELETE'])
+@write_required
 def bulk_delete():
     """Delete multiple transactions by IDs"""
     data = request.get_json()
@@ -253,6 +261,7 @@ def bulk_delete():
     })
 
 @transactions_bp.route('/bulk-delete-preview/', methods=['POST'])
+@write_required
 def bulk_delete_preview():
     """Preview which transactions will be deleted from a file upload"""
     from app.utils.file_processor import process_delete_file
@@ -283,6 +292,7 @@ def bulk_delete_preview():
         return jsonify({'error': str(e)}), 400
 
 @transactions_bp.route('/bulk-delete-by-file/', methods=['POST'])
+@write_required
 def bulk_delete_by_file():
     """Delete transactions by uploading a file (CSV or Excel with Transaction IDs)"""
     from app.utils.file_processor import process_delete_file
@@ -319,6 +329,7 @@ def bulk_delete_by_file():
         return jsonify({'error': str(e)}), 400
 
 @transactions_bp.route('/clear/all', methods=['DELETE'])
+@write_required
 def clear_all_transactions():
     """Delete all transactions"""
     try:
@@ -342,6 +353,7 @@ def clear_all_transactions():
         return jsonify({'error': str(e)}), 500
 
 @transactions_bp.route('/clear/by-date', methods=['DELETE'])
+@write_required
 def clear_transactions_by_date():
     """Delete transactions for a specific date"""
     target_date = request.args.get('date')
@@ -379,6 +391,7 @@ def clear_transactions_by_date():
         return jsonify({'error': str(e)}), 500
 
 @transactions_bp.route('/clear/by-period', methods=['DELETE'])
+@write_required
 def clear_transactions_by_period():
     """Delete transactions within a date range"""
     start_date = request.args.get('start_date')
