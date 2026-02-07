@@ -4151,13 +4151,15 @@ function openUserModal(user = null) {
         roleSelect.value = user.role;
         calendarPreferenceSelect.value = user.calendar_preference || 'both';
         
-        // Disable username and role for default admin
+        // Disable username and role for default admin, but allow calendar preference change
         if (user.is_default) {
             usernameInput.disabled = true;
             roleSelect.disabled = true;
+            calendarPreferenceSelect.disabled = false;  // Always allow calendar preference change for default admin
         } else {
             usernameInput.disabled = false;
             roleSelect.disabled = false;
+            calendarPreferenceSelect.disabled = false;
         }
     } else {
         // Create mode
