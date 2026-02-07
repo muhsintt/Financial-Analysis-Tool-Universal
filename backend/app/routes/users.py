@@ -68,6 +68,7 @@ def create_user():
     username = data.get('username', '').strip()
     password = data.get('password', '')
     role = data.get('role', 'standard')
+    calendar_preference = data.get('calendar_preference', 'both')
     
     if not username or not password:
         return jsonify({'error': 'Username and password are required'}), 400
@@ -81,6 +82,9 @@ def create_user():
     if role not in ['superuser', 'standard']:
         return jsonify({'error': 'Role must be superuser or standard'}), 400
     
+    if calendar_preference not in User.CALENDAR_CHOICES:
+        return jsonify({'error': 'Calendar preference must be both, gregorian, or badi'}), 400
+    
     # Check if username already exists
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'Username already exists'}), 400
@@ -88,7 +92,8 @@ def create_user():
     user = User(
         username=username,
         role=role,
-        is_default=False
+        is_default=False,
+        calendar_preference=calendar_preference
     )
     user.set_password(password)
     
@@ -98,8 +103,8 @@ def create_user():
     # Log user creation
     log_activity(
         ActivityLog.ACTION_CREATE,
-        f'Created user: {username} ({role})',
-        {'new_user_id': user.id, 'username': username, 'role': role}
+        f'Created user: {username} ({role}, calendar: {calendar_preference})',
+        {'new_user_id': user.id, 'username': username, 'role': role, 'calendar_preference': calendar_preference}
     )
     
     return jsonify(user.to_dict()), 201
@@ -137,6 +142,11 @@ def update_user(id):
         if len(data['password']) < 4:
             return jsonify({'error': 'Password must be at least 4 characters'}), 400
         user.set_password(data['password'])
+    
+    if 'calendar_preference' in data:
+        if data['calendar_preference'] not in User.CALENDAR_CHOICES:
+            return jsonify({'error': 'Calendar preference must be both, gregorian, or badi'}), 400
+        user.calendar_preference = data['calendar_preference']
     
     db.session.commit()
     

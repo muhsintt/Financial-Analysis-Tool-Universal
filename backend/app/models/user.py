@@ -5,11 +5,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 class User(db.Model):
     __tablename__ = 'users'
     
+    # Calendar preference options
+    CALENDAR_BOTH = 'both'
+    CALENDAR_GREGORIAN = 'gregorian'
+    CALENDAR_BADI = 'badi'
+    CALENDAR_CHOICES = [CALENDAR_BOTH, CALENDAR_GREGORIAN, CALENDAR_BADI]
+    
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='standard')  # 'superuser' or 'standard'
     is_default = db.Column(db.Boolean, default=False)  # True for the default admin user
+    calendar_preference = db.Column(db.String(20), nullable=False, default='both')  # 'both', 'gregorian', or 'badi'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -38,6 +45,7 @@ class User(db.Model):
             'username': self.username,
             'role': self.role,
             'is_default': self.is_default,
+            'calendar_preference': self.calendar_preference or 'both',
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }
@@ -50,7 +58,8 @@ class User(db.Model):
             admin = User(
                 username='admin',
                 role='superuser',
-                is_default=True
+                is_default=True,
+                calendar_preference='both'
             )
             admin.set_password('money')
             db.session.add(admin)

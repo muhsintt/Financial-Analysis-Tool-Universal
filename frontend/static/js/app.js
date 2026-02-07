@@ -444,8 +444,67 @@ function showMainApp() {
         document.body.classList.remove('read-only');
     }
     
+    // Apply calendar preference filtering
+    applyCalendarPreference();
+    
     // Initialize the rest of the app
     initializeApp();
+}
+
+/**
+ * Apply calendar preference to filter time frame options based on user settings
+ * @param {string} preference - 'both', 'gregorian', or 'badi'
+ */
+function applyCalendarPreference(preference = null) {
+    const calendarPref = preference || (state.currentUser && state.currentUser.calendar_preference) || 'both';
+    
+    // All time frame type selectors in the application
+    const timeFrameSelectors = [
+        'csTimeFrameType',           // Charts & Summaries main selector
+        'period1TimeFrameType',      // Period comparison 1
+        'period2TimeFrameType'       // Period comparison 2
+    ];
+    
+    timeFrameSelectors.forEach(selectorId => {
+        const select = document.getElementById(selectorId);
+        if (!select) return;
+        
+        // Get all options
+        const options = select.querySelectorAll('option');
+        
+        options.forEach(option => {
+            const value = option.value;
+            const isGregorian = value.startsWith('gregorian') || value === 'custom';
+            const isBadi = value.startsWith('badi');
+            
+            if (calendarPref === 'gregorian') {
+                // Hide Badi options
+                option.style.display = isBadi ? 'none' : '';
+                option.disabled = isBadi;
+            } else if (calendarPref === 'badi') {
+                // Hide Gregorian options (but keep custom which works for both)
+                option.style.display = (isGregorian && value !== 'custom') ? 'none' : '';
+                option.disabled = (isGregorian && value !== 'custom');
+            } else {
+                // Show all options
+                option.style.display = '';
+                option.disabled = false;
+            }
+        });
+        
+        // If current selection is now hidden, reset to first visible option
+        const currentOption = select.querySelector(`option[value="${select.value}"]`);
+        if (currentOption && currentOption.disabled) {
+            const firstVisible = select.querySelector('option:not([disabled])');
+            if (firstVisible) {
+                select.value = firstVisible.value;
+                // Trigger change event
+                select.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+    
+    console.log('Calendar preference applied:', calendarPref);
 }
 
 function updateUserDisplay() {
@@ -4033,6 +4092,12 @@ function renderUsersTable(users) {
     const tbody = document.getElementById('usersTableBody');
     if (!tbody) return;
     
+    const calendarLabels = {
+        'both': 'Both',
+        'gregorian': 'Gregorian',
+        'badi': "Badí'"
+    };
+    
     tbody.innerHTML = users.map(user => `
         <tr>
             <td>
@@ -4041,6 +4106,9 @@ function renderUsersTable(users) {
             </td>
             <td class="role-cell">
                 <span class="role-badge ${user.role}">${user.role === 'superuser' ? 'Super User' : 'Standard'}</span>
+            </td>
+            <td class="calendar-cell">
+                <span class="calendar-badge ${user.calendar_preference || 'both'}">${calendarLabels[user.calendar_preference] || 'Both'}</span>
             </td>
             <td>${new Date(user.created_at).toLocaleDateString()}</td>
             <td class="actions-cell">
@@ -4066,6 +4134,7 @@ function openUserModal(user = null) {
     const passwordInput = document.getElementById('userPassword');
     const roleSelect = document.getElementById('userRole');
     const usernameInput = document.getElementById('userUsername');
+    const calendarPreferenceSelect = document.getElementById('userCalendarPreference');
     
     form.reset();
     document.getElementById('userId').value = '';
@@ -4080,6 +4149,7 @@ function openUserModal(user = null) {
         document.getElementById('userId').value = user.id;
         usernameInput.value = user.username;
         roleSelect.value = user.role;
+        calendarPreferenceSelect.value = user.calendar_preference || 'both';
         
         // Disable username and role for default admin
         if (user.is_default) {
@@ -4097,6 +4167,7 @@ function openUserModal(user = null) {
         passwordInput.required = true;
         usernameInput.disabled = false;
         roleSelect.disabled = false;
+        calendarPreferenceSelect.value = 'both';
     }
     
     openModal('userModal');
@@ -4125,8 +4196,9 @@ async function handleUserSubmit(e) {
     const username = document.getElementById('userUsername').value.trim();
     const password = document.getElementById('userPassword').value;
     const role = document.getElementById('userRole').value;
+    const calendar_preference = document.getElementById('userCalendarPreference').value;
     
-    const data = { username, role };
+    const data = { username, role, calendar_preference };
     if (password) data.password = password;
     
     try {

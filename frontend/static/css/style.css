@@ -1836,6 +1836,35 @@ input:checked + .slider:before {
     margin-left: 8px;
 }
 
+/* Calendar preference badges */
+.calendar-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.calendar-badge.both {
+    background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+    color: #5e35b1;
+}
+
+.calendar-badge.gregorian {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.calendar-badge.badi {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.users-table .calendar-cell {
+    white-space: nowrap;
+}
+
 /* Read-only mode indicator */
 .read-only-banner {
     background: linear-gradient(135deg, #fff3e0, #ffe0b2);

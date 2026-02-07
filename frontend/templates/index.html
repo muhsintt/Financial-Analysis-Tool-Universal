@@ -747,6 +747,7 @@
                                         <tr>
                                             <th>Username</th>
                                             <th>Role</th>
+                                            <th>Calendar View</th>
                                             <th>Created</th>
                                             <th>Actions</th>
                                         </tr>
@@ -1420,6 +1421,15 @@
                         <option value="standard">Standard (Read-only)</option>
                         <option value="superuser">Super User (Full access)</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label>Calendar View</label>
+                    <select id="userCalendarPreference" class="form-control" required>
+                        <option value="both">Both (Gregorian & Badí')</option>
+                        <option value="gregorian">Gregorian Only</option>
+                        <option value="badi">Badí' (Bahá'í) Only</option>
+                    </select>
+                    <small class="form-text text-muted">Determines which calendar options are available for this user</small>
                 </div>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary" id="userSubmitBtn">Create User</button>
