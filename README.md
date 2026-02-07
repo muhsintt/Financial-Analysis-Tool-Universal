@@ -28,7 +28,38 @@ A comprehensive, fully-functional expense tracking and budget management applica
 
 ## Installation
 
-### Step 1: Install Python
+### Option 1: Docker (Recommended)
+
+The easiest way to run the application is with Docker:
+
+```bash
+# Clone the repository
+git clone https://github.com/muhsintt/Financial-Analysis-Tool.git
+cd Financial-Analysis-Tool
+
+# Build and run with Docker Compose
+docker-compose up -d --build
+```
+
+The application will be available at: **http://localhost:5000**
+
+#### Enable HTTPS (Optional)
+
+```bash
+# Create .env file with SSL enabled
+echo "SSL_ENABLED=true" > .env
+
+# Rebuild and run
+docker-compose up -d --build
+```
+
+With HTTPS enabled: **https://localhost:5443** (auto-generates self-signed certificate)
+
+For full Docker documentation, see [DOCKER.md](DOCKER.md).
+
+### Option 2: Manual Installation
+
+##### Step 1: Install Python
 
 If you don't have Python installed:
 1. Visit https://www.python.org/downloads/
@@ -36,7 +67,7 @@ If you don't have Python installed:
 3. Run the installer and **check "Add Python to PATH"**
 4. Click "Install Now"
 
-### Step 2: Navigate to Application Folder
+#### Step 2: Navigate to Application Folder
 
 1. Open Command Prompt (Windows) or Terminal (Mac/Linux)
 2. Navigate to the application directory:
@@ -44,7 +75,7 @@ If you don't have Python installed:
 cd "C:\Users\YourUsername\Documents\Financial analysis software\expense_tracker"
 ```
 
-### Step 3: Run the Startup Script
+##### Step 3: Run the Startup Script
 
 **On Windows:**
 ```
@@ -202,9 +233,28 @@ expense_tracker/
 │   ├── categorization_rules_sample.json
 │   ├── categorization_rules_sample.yaml
 │   └── categorization_rules_sample.csv
+├── certs/                   # SSL certificates (Docker)
+├── Dockerfile              # Docker build instructions
+├── docker-compose.yml      # Docker Compose configuration
+├── docker-entrypoint.sh    # Docker startup script
+├── DOCKER.md               # Docker documentation
 ├── start.bat               # Windows startup script
 ├── start.sh                # Mac/Linux startup script
-└── README.md               # This file
+└── Docker Issues
+
+**Container won't start:**
+```bash
+docker-compose logs financial-analysis-tool
+```
+
+**Reset everything:**
+```bash
+docker-compose down
+rm -rf ./data/*.db
+docker-compose up -d --build
+```
+
+### README.md               # This file
 ```
 
 ## Troubleshooting
