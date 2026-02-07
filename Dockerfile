@@ -14,6 +14,7 @@ ENV SSL_ENABLED=false
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     openssl \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -27,8 +28,9 @@ RUN pip install --no-cache-dir gunicorn
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 
-# Copy startup script
+# Copy startup script and fix line endings (Windows CRLF to Unix LF)
 COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN dos2unix /docker-entrypoint.sh
 
 # Create necessary directories
 RUN mkdir -p /app/backend/data /app/backend/uploads /app/certs
@@ -49,7 +51,7 @@ USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; import ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://localhost:5443/api/status', context=ctx) if '${SSL_ENABLED}' == 'true' else urllib.request.urlopen('http://localhost:5000/api/status')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/status')" || exit 1
 
 # Run the application with gunicorn via entrypoint
 ENTRYPOINT ["/docker-entrypoint.sh"]
