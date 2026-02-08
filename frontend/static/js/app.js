@@ -5161,17 +5161,25 @@ function initializeLogSettingsListeners() {
             const resp = await fetch('/api/status/settings/db/backup', { credentials: 'include' });
             if (!resp.ok) throw new Error('Failed to download database');
             const blob = await resp.blob();
+            // Prompt user to save file
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'expense_tracker.db';
+            a.style.display = 'none';
             document.body.appendChild(a);
             a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-            showSettingsBackupMessage('Database backup downloaded.', 'success');
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+            showSettingsBackupMessage('Database backup downloaded. If you did not see a file save dialog, please check your browser settings.', 'success');
         } catch (e) {
-            showSettingsBackupMessage('Failed to back up database: ' + e, 'error');
+            showSettingsBackupMessage(
+                'Failed to back up database: ' + e +
+                '. If the download does not start, please manually save the database file from <b>/app/backend/data/expense_tracker.db</b> in your Docker container.',
+                'error'
+            );
         }
     });
 
