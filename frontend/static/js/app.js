@@ -1,4 +1,15 @@
 // API Configuration
+
+// Currency formatting helper
+function formatCurrency(amount, currency = 'USD', locale = 'en-US') {
+    if (typeof amount !== 'number' || isNaN(amount)) return '';
+    return amount.toLocaleString(locale, {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
 const API_URL = `${window.location.protocol}//${window.location.host}/api`;
 console.log('API_URL:', API_URL);
 
