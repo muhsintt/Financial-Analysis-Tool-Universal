@@ -264,9 +264,19 @@ def preview_file():
             preview_data = process_csv_file(filepath, limit=10)
         else:
             preview_data = process_excel_file(filepath, limit=10)
-        
+
+        # Add category name for each preview row
+        from app.models.category import Category
+        for row in preview_data:
+            category_id = row.get('category_id')
+            if category_id:
+                category = Category.query.get(category_id)
+                row['category'] = category.name if category else 'Uncategorized'
+            else:
+                row['category'] = 'Uncategorized'
+
         os.remove(filepath)
-        
+
         return jsonify({
             'preview': preview_data,
             'total_rows': len(preview_data)
