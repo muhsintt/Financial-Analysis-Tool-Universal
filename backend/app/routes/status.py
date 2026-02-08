@@ -157,7 +157,7 @@ def restore_settings():
                 role=u.get('role', 'standard'),
                 is_default=u.get('is_default', False),
                 calendar_preference=u.get('calendar_preference', 'both')
-
+            )
 
     # Restore categories (skip if name exists)
     for c in data.get('categories', []):
