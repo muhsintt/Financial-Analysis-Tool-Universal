@@ -5079,6 +5079,125 @@ function initializeLogSettingsListeners() {
     
     // Save logs to file button
     document.getElementById('saveLogsToFileBtn')?.addEventListener('click', saveLogsToFile);
+
+    // --- Settings Backup/Restore ---
+    document.getElementById('saveSettingsBtn')?.addEventListener('click', async () => {
+        showSettingsBackupMessage('Saving settings...', 'info');
+        // For now, just show a message (settings are always saved to DB)
+        setTimeout(() => showSettingsBackupMessage('Settings saved to database.', 'success'), 800);
+    });
+
+    document.getElementById('backupSettingsBtn')?.addEventListener('click', async () => {
+        showSettingsBackupMessage('Preparing backup...', 'info');
+        try {
+            const resp = await fetch('/api/status/settings/backup', { credentials: 'include' });
+            if (!resp.ok) throw new Error('Failed to download backup');
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'settings-backup.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            showSettingsBackupMessage('Settings backup downloaded.', 'success');
+        } catch (e) {
+            showSettingsBackupMessage('Failed to back up settings: ' + e, 'error');
+        }
+    });
+
+    document.getElementById('restoreSettingsInput')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        showSettingsBackupMessage('Restoring settings...', 'info');
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const resp = await fetch('/api/status/settings/restore', {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                showSettingsBackupMessage('Settings restored successfully. Please reload the page.', 'success');
+            } else {
+                showSettingsBackupMessage('Restore failed: ' + (data.error || 'Unknown error'), 'error');
+            }
+        } catch (e) {
+            showSettingsBackupMessage('Restore failed: ' + e, 'error');
+        }
+    });
+
+    function showSettingsBackupMessage(msg, type) {
+        const el = document.getElementById('settingsBackupMessage');
+        if (!el) return;
+        el.textContent = msg;
+        el.className = type ? 'msg-' + type : '';
+    }
+
+    // --- Reset Profile ---
+    document.getElementById('resetProfileBtn')?.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to reset your profile to default? This will delete all data except the admin user.')) return;
+        showSettingsBackupMessage('Resetting profile...', 'info');
+        try {
+            const resp = await fetch('/api/status/settings/reset', { method: 'POST', credentials: 'include' });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                showSettingsBackupMessage('Profile reset. Please reload the page.', 'success');
+            } else {
+                showSettingsBackupMessage('Reset failed: ' + (data.error || 'Unknown error'), 'error');
+            }
+        } catch (e) {
+            showSettingsBackupMessage('Reset failed: ' + e, 'error');
+        }
+    });
+
+    // --- Back Up Database ---
+    document.getElementById('backupDbBtn')?.addEventListener('click', async () => {
+        showSettingsBackupMessage('Preparing database backup...', 'info');
+        try {
+            const resp = await fetch('/api/status/settings/db/backup', { credentials: 'include' });
+            if (!resp.ok) throw new Error('Failed to download database');
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'expense_tracker.db';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            showSettingsBackupMessage('Database backup downloaded.', 'success');
+        } catch (e) {
+            showSettingsBackupMessage('Failed to back up database: ' + e, 'error');
+        }
+    });
+
+    // --- Restore Database ---
+    document.getElementById('restoreDbInput')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        showSettingsBackupMessage('Restoring database...', 'info');
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const resp = await fetch('/api/status/settings/db/restore', {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                showSettingsBackupMessage('Database restored. Please restart the app.', 'success');
+            } else {
+                showSettingsBackupMessage('Restore failed: ' + (data.error || 'Unknown error'), 'error');
+            }
+        } catch (e) {
+            showSettingsBackupMessage('Restore failed: ' + e, 'error');
+        }
+    });
     
     // Load settings on init
     loadLogSettings();

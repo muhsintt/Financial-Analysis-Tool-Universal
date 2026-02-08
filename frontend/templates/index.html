@@ -850,6 +850,35 @@
                         <!-- Activity Logs Section -->
                         <div class="settings-section" id="activityLogsSection">
                             <h2><i class="fas fa-history"></i> Activity Logs</h2>
+
+                            <!-- Settings Backup/Restore -->
+                            <div class="settings-backup-restore-card superuser-only" style="margin-bottom: 2em;">
+                                <h3><i class="fas fa-cog"></i> Settings Management</h3>
+                                <div class="settings-backup-actions">
+                                    <button class="btn btn-success" id="saveSettingsBtn">
+                                        <i class="fas fa-save"></i> Save Settings
+                                    </button>
+                                    <button class="btn btn-secondary" id="backupSettingsBtn">
+                                        <i class="fas fa-download"></i> Back Up Settings
+                                    </button>
+                                    <label class="btn btn-primary" style="margin-bottom:0;">
+                                        <i class="fas fa-upload"></i> Restore Settings
+                                        <input type="file" id="restoreSettingsInput" accept="application/json" style="display:none;">
+                                    </label>
+                                    <hr>
+                                    <button class="btn btn-danger" id="resetProfileBtn">
+                                        <i class="fas fa-undo"></i> Reset Profile to Default
+                                    </button>
+                                    <button class="btn btn-secondary" id="backupDbBtn">
+                                        <i class="fas fa-database"></i> Back Up Database
+                                    </button>
+                                    <label class="btn btn-primary" style="margin-bottom:0;">
+                                        <i class="fas fa-database"></i> Restore Database
+                                        <input type="file" id="restoreDbInput" accept=".db,application/octet-stream" style="display:none;">
+                                    </label>
+                                </div>
+                                <div id="settingsBackupMessage" style="margin-top:0.5em;"></div>
+                            </div>
                             
                             <!-- Log Settings Card -->
                             <div class="log-settings-card superuser-only">
