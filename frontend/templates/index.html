@@ -847,13 +847,10 @@
                             </div>
                         </div>
                         
-                        <!-- Activity Logs Section -->
-                        <div class="settings-section" id="activityLogsSection">
-                            <h2><i class="fas fa-history"></i> Activity Logs</h2>
-
-                            <!-- Settings Backup/Restore -->
-                            <div class="settings-backup-restore-card superuser-only" style="margin-bottom: 2em;">
-                                <h3><i class="fas fa-cog"></i> Settings Management</h3>
+                        <!-- Settings Management Section (Superuser only) -->
+                        <div class="settings-section superuser-only" id="settingsManagementSection">
+                            <h2><i class="fas fa-cog"></i> Settings Management</h2>
+                            <div class="settings-backup-restore-card" style="margin-bottom: 2em;">
                                 <div class="settings-backup-actions">
                                     <button class="btn btn-success" id="saveSettingsBtn">
                                         <i class="fas fa-save"></i> Save Settings
@@ -878,6 +875,12 @@
                                     </label>
                                 </div>
                                 <div id="settingsBackupMessage" style="margin-top:0.5em;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Activity Logs Section -->
+                        <div class="settings-section" id="activityLogsSection">
+                            <h2><i class="fas fa-history"></i> Activity Logs</h2>
                             </div>
                             
                             <!-- Log Settings Card -->
