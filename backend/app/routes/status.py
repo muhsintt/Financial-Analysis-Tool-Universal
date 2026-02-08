@@ -1,36 +1,57 @@
+
 import os
-from flask import current_app
+import io
+import json
+from datetime import datetime
+from flask import Blueprint, jsonify, request, session, send_file, current_app
+from app import db
+from app.models.api_status import ApiStatus
+from app.models.activity_log import ActivityLog
+from app.models.log_settings import LogSettings
+from app.models.user import User
+from app.models.category import Category
+from app.models.categorization_rule import CategorizationRule
+from app.models.budget import Budget
+from app.routes.auth import write_required
+
+
+status_bp = Blueprint('status', __name__, url_prefix='/api/status')
+
+
+# --- PROFILE RESET ---
 @status_bp.route('/settings/reset', methods=['POST'])
 @write_required
 def reset_profile():
     """Reset all settings and data except default admin user"""
-    # Delete all users except default admin
-    from app.models.user import User
     User.query.filter(User.username != 'admin').delete()
-    # Delete all categories, rules, budgets, logs, etc.
-    from app.models.category import Category
-    from app.models.categorization_rule import CategorizationRule
-    from app.models.budget import Budget
-    from app.models.activity_log import ActivityLog
-    from app.models.log_settings import LogSettings
     Category.query.delete()
     CategorizationRule.query.delete()
     Budget.query.delete()
     ActivityLog.query.delete()
     LogSettings.query.delete()
     db.session.commit()
-    return jsonify({'success': True, 'message': 'Profile reset to default. Only admin user remains.'})
+    return jsonify({
+        'success': True,
+        'message': 'Profile reset to default. Only admin user remains.'
+    })
 
+
+# --- DATABASE BACKUP ---
 @status_bp.route('/settings/db/backup', methods=['GET'])
 @write_required
 def backup_database():
     """Download the full SQLite database file"""
-    db_path = os.path.join(current_app.root_path, '..', 'data', 'expense_tracker.db')
-    db_path = os.path.abspath(db_path)
-    if not os.path.exists(db_path):
-        return jsonify({'error': 'Database file not found'}), 404
-    return send_file(db_path, as_attachment=True, download_name='expense_tracker.db', mimetype='application/octet-stream')
+    db_path = os.path.join(
+        current_app.root_path, '..', 'data', 'expense_tracker.db'
 
+        return jsonify({'error': 'Database file not found'}), 404
+    return send_file(
+        db_path,
+        as_attachment=True,
+        download_name='expense_tracker.db',
+        mimetype='application/octet-stream'
+
+# --- DATABASE RESTORE ---
 @status_bp.route('/settings/db/restore', methods=['POST'])
 @write_required
 def restore_database():
@@ -38,22 +59,17 @@ def restore_database():
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
     file = request.files['file']
-    db_path = os.path.join(current_app.root_path, '..', 'data', 'expense_tracker.db')
+    db_path = os.path.join(
+        current_app.root_path, '..', 'data', 'expense_tracker.db'
+    )
     db_path = os.path.abspath(db_path)
     file.save(db_path)
-    return jsonify({'success': True, 'message': 'Database restored. Please restart the app.'})
-from flask import Blueprint, jsonify, request, session, send_file
-from app import db
-from app.models.api_status import ApiStatus
-from app.models.activity_log import ActivityLog
-from app.models.log_settings import LogSettings
-from app.routes.auth import write_required
-from datetime import datetime
-import json
+    return jsonify({
+        'success': True,
+        'message': 'Database restored. Please restart the app.'
+    })
 
-import io
 
-status_bp = Blueprint('status', __name__, url_prefix='/api/status')
 
 def log_activity(action, description, details=None):
     """Helper to log settings activities - checks settings before logging"""
@@ -61,9 +77,9 @@ def log_activity(action, description, details=None):
         settings = LogSettings.get_settings()
         if not settings.should_log(action, ActivityLog.CATEGORY_SETTINGS):
             return
-    except:
+    except Exception:
         pass
-    
+
     log = ActivityLog(
         action=action,
         category=ActivityLog.CATEGORY_SETTINGS,
@@ -76,6 +92,8 @@ def log_activity(action, description, details=None):
     db.session.add(log)
     db.session.commit()
 
+
+
 def get_or_create_api_status():
     """Get or create the API status record"""
     status = ApiStatus.query.first()
@@ -86,18 +104,18 @@ def get_or_create_api_status():
     return status
 
 
-# --- SETTINGS BACKUP/RESTORE ---
-from app.models.user import User
-from app.models.category import Category
-from app.models.log_settings import LogSettings
-from app.models.categorization_rule import CategorizationRule
-from app.models.budget import Budget
+
+
+ # --- SETTINGS BACKUP/RESTORE ---
 
 @status_bp.route('/settings/backup', methods=['GET'])
 def backup_settings():
     """Download all settings as a JSON file"""
     users = [u.to_dict() for u in User.query.all()]
-    categories = [c.to_dict(include_subcategories=True) for c in Category.query.all()]
+    categories = [
+        c.to_dict(include_subcategories=True)
+        for c in Category.query.all()
+    ]
     log_settings = LogSettings.get_settings().to_dict()
     rules = [r.to_dict() for r in CategorizationRule.query.all()]
     budgets = [b.to_dict() for b in Budget.query.all()]
@@ -111,8 +129,12 @@ def backup_settings():
     buf = io.BytesIO()
     buf.write(json.dumps(data, indent=2, default=str).encode('utf-8'))
     buf.seek(0)
-    return send_file(buf, mimetype='application/json', as_attachment=True, download_name='settings-backup.json')
-
+    return send_file(
+        buf,
+        mimetype='application/json',
+        as_attachment=True,
+        download_name='settings-backup.json'
+    )
 @status_bp.route('/settings/restore', methods=['POST'])
 @write_required
 def restore_settings():
@@ -133,13 +155,13 @@ def restore_settings():
                 role=u.get('role', 'standard'),
                 is_default=u.get('is_default', False),
                 calendar_preference=u.get('calendar_preference', 'both')
-            )
-            user.set_password('restored')
-            db.session.add(user)
+
 
     # Restore categories (skip if name exists)
     for c in data.get('categories', []):
-        if not Category.query.filter_by(name=c['name'], parent_id=c['parent_id']).first():
+        if not Category.query.filter_by(
+            name=c['name'], parent_id=c['parent_id']
+        ).first():
             cat = Category(
                 name=c['name'],
                 type=c['type'],
@@ -197,6 +219,7 @@ def restore_settings():
 @status_bp.route('/', methods=['GET'])
 def get_status():
     """Get current API status"""
+
     status = get_or_create_api_status()
     return jsonify(status.to_dict())
 
