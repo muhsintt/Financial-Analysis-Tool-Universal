@@ -930,10 +930,8 @@ function initializeEventListeners() {
     fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files));
 
     document.getElementById('confirmUploadBtn').addEventListener('click', confirmUpload);
-    document.getElementById('cancelUploadBtn').addEventListener('click', () => {
-        document.getElementById('uploadPreview').style.display = 'none';
-        fileInput.value = '';
-    });
+    document.getElementById('cancelUploadBtn').addEventListener('click', resetUploadUI);
+    document.getElementById('cancelUploadBtn').style.display = 'none';
 
     // Modal close buttons
     document.querySelectorAll('.close').forEach(btn => {
@@ -1186,7 +1184,7 @@ async function loadCategoryManagement() {
                                         <button class="btn-icon edit" title="Edit" onclick="editCategory(${sub.id})">
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <button class="btn-icon delete" title="Delete" onclick="deleteCategory(${sub.id}, '${sub.name.replace(/'/g, "\\'")}')">
+                                        <button class="btn-icon delete" title="Delete" onclick="deleteSubcategoryFromModal(${sub.id}, '${sub.name.replace(/'/g, "\\'")}')">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </div>
@@ -1610,9 +1608,7 @@ async function loadDashboard() {
                     <div class="trans-desc">${t.description}</div>
                     <div class="trans-cat">${t.category_name} • ${formatDateWithCalendar(t.date)}</div>
                 </div>
-                <div class="trans-amount ${t.type}">
-                    ${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
-                </div>
+                <div class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</td>
             </div>
         `).join('');
     } catch (error) {
@@ -2780,6 +2776,10 @@ async function generateChartsSummaries() {
             showCSNotification(`Report ready: ${transactions.length} transactions for ${dateRange.label}`);
         }
         
+        // Clear the form
+        document.getElementById('csCustomStart').value = '';
+        document.getElementById('csCustomEnd').value = '';
+        
     } catch (error) {
         console.error('Error generating charts & summaries:', error);
         alert('Error generating report: ' + error.message);
@@ -3139,15 +3139,15 @@ function getComparePeriodRange(periodNum) {
             if (!monthValue) return null;
             const [year, month] = monthValue.split('-').map(Number);
             startDate = new Date(year, month - 1, 1);
-            endDate = new Date(year, month, 0);
+            endDate = new Date(year, month, 0); // Last day of month
             label = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
             break;
         }
         case 'gregorian-year': {
             const year = parseInt(document.getElementById(`csCompare${periodNum}Year`)?.value);
             if (!year) return null;
-            startDate = new Date(year, 0, 1);
-            endDate = new Date(year, 11, 31);
+            startDate = new Date(year, 0, 1); // January 1
+            endDate = new Date(year, 11, 31); // December 31
             label = `Year ${year}`;
             break;
         }
@@ -3549,67 +3549,30 @@ async function confirmUpload() {
     }
 }
 
-// Utility Functions
-function formatCurrency(amount) {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD'
-    }).format(amount);
-}
-
-function formatDate(dateStr) {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
-}
-
-// Format date based on current calendar selection
-function formatDateWithCalendar(dateStr) {
-    if (!dateStr) return '';
-    
-    try {
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return dateStr;  // Return original if invalid date
-        
-        if (state.calendarType === 'badi') {
-            const badi = gregorianToBadi(date);
-            return formatBadiDate(badi.year, badi.month, badi.day);
-        } else {
-            return date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            });
-        }
-    } catch (error) {
-        console.error('Error formatting date:', error);
-        return dateStr;
+// Utility to reset upload state/UI
+function resetUploadUI() {
+    selectedFile = null;
+    document.getElementById('uploadPreview').style.display = 'none';
+    document.getElementById('fileInput').value = '';
+    const statusDiv = document.getElementById('uploadStatus');
+    if (statusDiv) {
+        statusDiv.style.display = 'none';
+        statusDiv.className = 'upload-status';
+        statusDiv.textContent = '';
     }
+    const tbody = document.getElementById('previewBody');
+    if (tbody) tbody.innerHTML = '';
 }
 
-// Format date range for display
-function formatDateRange(startDateStr, endDateStr) {
-    if (state.calendarType === 'badi') {
-        const startBadi = gregorianToBadi(new Date(startDateStr));
-        const endBadi = gregorianToBadi(new Date(endDateStr));
-        return `${formatBadiDate(startBadi.year, startBadi.month, startBadi.day)} - ${formatBadiDate(endBadi.year, endBadi.month, endBadi.day)}`;
-    } else {
-        return `${formatDate(startDateStr)} - ${formatDate(endDateStr)}`;
-    }
+// Replace cancelUploadBtn handler to use resetUploadUI
+const cancelBtn = document.getElementById('cancelUploadBtn');
+if (cancelBtn) {
+    cancelBtn.addEventListener('click', resetUploadUI);
 }
 
-function openModal(modalId) {
-    document.getElementById(modalId).classList.add('show');
-}
-
-function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('show');
-}
-
-// ============ CATEGORIZATION RULES ============
+// ==========================================
+// Rules
+// ==========================================
 
 // Load Rules
 async function loadRules() {
