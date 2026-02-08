@@ -43,14 +43,16 @@ def backup_database():
     """Download the full SQLite database file"""
     db_path = os.path.join(
         current_app.root_path, '..', 'data', 'expense_tracker.db'
-
+    )
+    db_path = os.path.abspath(db_path)
+    if not os.path.exists(db_path):
         return jsonify({'error': 'Database file not found'}), 404
     return send_file(
         db_path,
         as_attachment=True,
         download_name='expense_tracker.db',
         mimetype='application/octet-stream'
-
+    )
 # --- DATABASE RESTORE ---
 @status_bp.route('/settings/db/restore', methods=['POST'])
 @write_required
