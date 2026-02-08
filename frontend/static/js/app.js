@@ -949,15 +949,45 @@ function initializeEventListeners() {
         }
     });
 
-    // Menu toggle
+    // Menu toggle for mobile sidebar
     document.getElementById('menuToggle').addEventListener('click', () => {
-        document.querySelector('.sidebar').classList.toggle('show');
+        toggleMobileSidebar();
     });
+    
+    // Close sidebar when clicking overlay
+    document.getElementById('sidebarOverlay').addEventListener('click', () => {
+        closeMobileSidebar();
+    });
+    
+    // Close sidebar via close button
+    document.getElementById('sidebarClose').addEventListener('click', () => {
+        closeMobileSidebar();
+    });
+}
+
+// Mobile sidebar functions
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    sidebar.classList.toggle('show');
+    overlay.classList.toggle('show');
+    document.body.classList.toggle('sidebar-open');
+}
+
+function closeMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    sidebar.classList.remove('show');
+    overlay.classList.remove('show');
+    document.body.classList.remove('sidebar-open');
 }
 
 // Navigation
 function navigateTo(page) {
     console.log('Navigating to:', page);
+    
+    // Close mobile sidebar when navigating
+    closeMobileSidebar();
     
     // Update active nav link
     document.querySelectorAll('.nav-link').forEach(link => {

@@ -47,6 +47,7 @@ body {
     gap: 10px;
     margin-bottom: 30px;
     font-size: 14px;
+    position: relative;
 }
 
 .logo i {
@@ -56,6 +57,24 @@ body {
 
 .logo h1 {
     font-size: 20px;
+    flex: 1;
+}
+
+/* Sidebar close button - hidden on desktop */
+.sidebar-close {
+    display: none;
+    background: none;
+    border: none;
+    color: #bdc3c7;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px;
+    margin-left: auto;
+    transition: color 0.2s;
+}
+
+.sidebar-close:hover {
+    color: white;
 }
 
 .nav-menu ul {
@@ -3230,5 +3249,472 @@ body.print-landscape {
     
     .cs-summary-cards {
         grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* =============================================
+   ENHANCED MOBILE RESPONSIVE STYLES
+   ============================================= */
+
+/* Prevent body scroll when sidebar is open on mobile */
+body.sidebar-open {
+    overflow: hidden;
+}
+
+/* Mobile overlay backdrop */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.show {
+    display: block;
+    opacity: 1;
+}
+
+/* Tablet styles (768px and below) */
+@media (max-width: 768px) {
+    /* Sidebar improvements */
+    .sidebar {
+        width: 260px;
+        transform: translateX(-100%);
+        z-index: 999;
+    }
+    
+    .sidebar.show {
+        transform: translateX(0);
+    }
+    
+    .sidebar .logo h1 {
+        display: block;
+    }
+    
+    .sidebar .nav-link span {
+        display: inline;
+    }
+    
+    /* Show sidebar close button on mobile */
+    .sidebar-close {
+        display: block;
+    }
+    
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+    }
+    
+    /* Menu toggle always visible on tablet */
+    .menu-toggle {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 18px;
+    }
+    
+    /* Header improvements */
+    .header {
+        padding: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .header-left {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .header-left h2 {
+        font-size: 18px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .header-right {
+        width: 100%;
+        margin-top: 10px;
+    }
+    
+    .date-selector {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .date-selector select,
+    .date-selector input {
+        min-width: 120px;
+        flex: 1;
+    }
+    
+    /* User menu improvements */
+    .user-menu {
+        position: relative;
+    }
+    
+    .btn-user {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    .user-dropdown {
+        right: 0;
+        min-width: 200px;
+    }
+    
+    /* Page content */
+    .page-content {
+        padding: 12px;
+    }
+    
+    /* Stats grid */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    
+    .stat-card {
+        padding: 15px;
+    }
+    
+    .stat-card h3 {
+        font-size: 20px;
+    }
+    
+    /* Tables responsive */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    table {
+        min-width: 600px;
+    }
+    
+    /* Better touch targets */
+    .btn, button {
+        min-height: 44px;
+        padding: 10px 16px;
+    }
+    
+    .btn-icon {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    /* Form controls */
+    .form-control {
+        min-height: 44px;
+        font-size: 16px; /* Prevents iOS zoom */
+    }
+    
+    select.form-control {
+        min-height: 44px;
+    }
+    
+    /* Modal improvements */
+    .modal-content {
+        width: 95%;
+        max-width: 500px;
+        margin: 10% auto;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+    
+    .modal-header {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 1;
+    }
+    
+    /* Cards */
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .chart-card {
+        min-height: 300px;
+    }
+    
+    /* Budgets */
+    .budgets-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Rules */
+    .rules-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Page headers */
+    .page-header {
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+    }
+    
+    .page-header .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* Settings panels */
+    .settings-section {
+        padding: 15px;
+    }
+    
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    /* User management table */
+    .users-table {
+        display: block;
+        overflow-x: auto;
+    }
+    
+    /* Activity logs */
+    .activity-filters {
+        flex-direction: column;
+    }
+    
+    .activity-filters select,
+    .activity-filters input {
+        width: 100%;
+    }
+}
+
+/* Mobile styles (480px and below) */
+@media (max-width: 480px) {
+    /* Stats grid single column */
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .stat-card {
+        padding: 12px;
+    }
+    
+    .stat-card h3 {
+        font-size: 18px;
+    }
+    
+    .stat-card p {
+        font-size: 12px;
+    }
+    
+    /* Header compact */
+    .header {
+        padding: 10px;
+    }
+    
+    .header-left h2 {
+        font-size: 16px;
+    }
+    
+    /* Date selector stacked */
+    .date-selector {
+        flex-direction: column;
+    }
+    
+    .date-selector select,
+    .date-selector input {
+        width: 100%;
+    }
+    
+    .btn-apply-calendar {
+        width: 100%;
+    }
+    
+    /* Modal full screen on mobile */
+    .modal-content {
+        width: 100%;
+        height: 100%;
+        max-height: 100%;
+        margin: 0;
+        border-radius: 0;
+    }
+    
+    .modal-header {
+        border-radius: 0;
+    }
+    
+    /* Login screen */
+    .login-container {
+        width: 95%;
+        padding: 25px;
+        margin: 20px;
+    }
+    
+    .login-header h1 {
+        font-size: 24px;
+    }
+    
+    /* Summary cards */
+    .cs-summary-cards {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Transaction list compact */
+    .transaction-item {
+        padding: 10px;
+    }
+    
+    /* Tabs scrollable */
+    .tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+    }
+    
+    .tab-btn {
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    
+    /* Page content minimal padding */
+    .page-content {
+        padding: 8px;
+    }
+    
+    /* Search bar */
+    .search-bar {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .search-bar input {
+        width: 100%;
+    }
+    
+    .search-bar .btn {
+        width: 100%;
+    }
+    
+    /* Category breakdown */
+    .category-breakdown {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Period comparison */
+    .period-comparison-container {
+        flex-direction: column;
+    }
+    
+    .period-selector {
+        width: 100%;
+    }
+    
+    /* Action buttons in cards */
+    .card-actions {
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
+    .card-actions .btn {
+        flex: 1;
+        min-width: 80px;
+    }
+}
+
+/* Extra small devices (360px and below) */
+@media (max-width: 360px) {
+    .header-left h2 {
+        font-size: 14px;
+    }
+    
+    .logo h1 {
+        font-size: 16px;
+    }
+    
+    .stat-card h3 {
+        font-size: 16px;
+    }
+    
+    .btn {
+        font-size: 13px;
+        padding: 8px 12px;
+    }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+    /* Larger touch targets */
+    .nav-link {
+        padding: 14px 15px;
+    }
+    
+    .btn-icon {
+        min-width: 48px;
+        min-height: 48px;
+    }
+    
+    /* Remove hover effects that don't work well on touch */
+    .nav-link:hover {
+        background: transparent;
+    }
+    
+    .nav-link.active:hover {
+        background: var(--primary);
+    }
+    
+    /* Improve scrolling */
+    .table-container,
+    .modal-body,
+    .page-content {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Checkbox and radio larger */
+    input[type="checkbox"],
+    input[type="radio"] {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+/* Landscape mobile orientation */
+@media (max-height: 500px) and (orientation: landscape) {
+    .modal-content {
+        margin: 2% auto;
+        max-height: 96vh;
+    }
+    
+    .login-container {
+        padding: 20px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+}
+
+/* iOS Safari fixes */
+@supports (-webkit-touch-callout: none) {
+    /* Fix for iOS bounce scroll */
+    .sidebar {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Fix for iOS input zoom */
+    input[type="text"],
+    input[type="password"],
+    input[type="email"],
+    input[type="number"],
+    select,
+    textarea {
+        font-size: 16px;
     }
 }
