@@ -265,7 +265,7 @@ def preview_file():
         else:
             preview_data = process_excel_file(filepath, limit=10)
 
-        # Add category name for each preview row
+        # Add category name for each preview row (for real bank statement format)
         from app.models.category import Category
         for row in preview_data:
             category_id = row.get('category_id')
