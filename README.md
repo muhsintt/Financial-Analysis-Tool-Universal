@@ -55,6 +55,52 @@ docker compose up -d --build
 
 With HTTPS enabled: **https://localhost** (port 443, auto-generates self-signed certificate)
 
+#### Data Persistence
+
+The application uses Docker volumes to persist your data across container rebuilds:
+- **Database**: Stored in `app_data` volume
+- **Uploads**: Stored in `app_uploads` volume
+
+Your data will be preserved even when you update or recreate containers!
+
+#### Update Containers
+
+To update to the latest version:
+
+**Windows:**
+```batch
+update.bat
+```
+
+**macOS/Linux:**
+```bash
+./update.sh
+```
+
+The update script will:
+- Create an optional backup before updating
+- Pull the latest images
+- Rebuild containers with no cache
+- Preserve all your data automatically
+
+#### Backup & Restore Data
+
+Create backups of your financial data:
+
+**Windows:**
+```batch
+backup.bat backup              # Create backup
+backup.bat list                # List backups
+backup.bat restore -f backup.tar.gz  # Restore backup
+```
+
+**macOS/Linux:**
+```bash
+./backup.sh backup             # Create backup
+./backup.sh list               # List backups  
+./backup.sh restore -f backup.tar.gz  # Restore backup
+```
+
 For full Docker documentation, see [DOCKER.md](DOCKER.md).
 
 ### Option 2: Manual Installation

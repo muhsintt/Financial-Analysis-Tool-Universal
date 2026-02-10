@@ -18,7 +18,10 @@ def create_app():
                 static_folder=os.path.abspath(os.path.join(parent_dir, 'frontend', 'static')))
     
     # Configuration
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(backend_dir, "expense_tracker.db")}'
+    # Store database in data directory for persistence across container rebuilds
+    data_dir = os.path.join(backend_dir, 'data')
+    os.makedirs(data_dir, exist_ok=True)  # Ensure data directory exists
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(data_dir, "expense_tracker.db")}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file upload
     app.config['UPLOAD_FOLDER'] = os.path.join(backend_dir, 'uploads')

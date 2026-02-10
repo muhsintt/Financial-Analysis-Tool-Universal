@@ -1,0 +1,14 @@
+# Docker Compose Override for Local Development
+# This file provides bind mounts for easier access to data during development
+# To use: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+services:
+  app:
+    volumes:
+      # Override with bind mounts for local development
+      - ./data:/app/backend/data
+      - ./uploads:/app/backend/uploads
+    environment:
+      # Enable debug mode for development
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1

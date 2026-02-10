@@ -8,9 +8,12 @@ services:
       dockerfile: Dockerfile
     container_name: financial-analysis-app
     volumes:
-      # Persist database and uploads
-      - ./data:/app/backend/data
-      - ./uploads:/app/backend/uploads
+      # Persist database and uploads across container rebuilds
+      - app_data:/app/backend/data
+      - app_uploads:/app/backend/uploads
+      # Optional: mount local directories for direct access
+      # - ./data:/app/backend/data
+      # - ./uploads:/app/backend/uploads
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
@@ -51,6 +54,9 @@ networks:
   app-network:
     driver: bridge
 
+# Named volumes for persistent data storage
 volumes:
-  data:
-  uploads:
+  app_data:
+    driver: local
+  app_uploads:
+    driver: local

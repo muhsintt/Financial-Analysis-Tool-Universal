@@ -83,15 +83,122 @@ Access at: **https://localhost** (port 443)
    docker compose up -d --build
    ```
 
-## Data Persistence
+## Data Persistence & Volumes
 
-The following directories are mounted as volumes:
+### Persistent Storage
 
-| Local Path | Container Path | Purpose |
-|------------|----------------|---------|
-| `./data` | `/app/backend/data` | SQLite database |
-| `./uploads` | `/app/backend/uploads` | Uploaded files |
-| `./certs` | `/etc/nginx/ssl` | SSL certificates |
+The application uses **Docker named volumes** to ensure data persistence across container rebuilds. Your data is safe even when updating or recreating containers.
+
+**Volumes:**
+- `financial-analysis-tool_app_data` - Database and application data
+- `financial-analysis-tool_app_uploads` - Uploaded CSV/Excel files
+
+**What's Persisted:**
+- SQLite database with all transactions, categories, budgets, users
+- Uploaded bank statement files
+- Activity logs and configuration settings
+- SSL certificates (auto-generated)
+
+### Update Containers (Preserves Data)
+
+Update to the latest version while keeping all your data:
+
+**Windows:**
+```batch
+update.bat
+```
+
+**macOS/Linux:**
+```bash
+./update.sh
+```
+
+The update script will:
+- Optionally create a backup before updating
+- Pull the latest Docker images
+- Rebuild containers without cache
+- Preserve all your financial data
+- Perform health checks
+
+### Backup & Restore
+
+**Create Backup:**
+```bash
+# Windows
+backup.bat backup
+
+# macOS/Linux  
+./backup.sh backup
+```
+
+**List Backups:**
+```bash
+# Windows
+backup.bat list
+
+# macOS/Linux
+./backup.sh list
+```
+
+**Restore from Backup:**
+```bash
+# Windows
+backup.bat restore -f path\to\backup.tar.gz
+
+# macOS/Linux
+./backup.sh restore -f path/to/backup.tar.gz
+```
+
+**Clean Old Backups:**
+```bash
+# Windows
+backup.bat clean
+
+# macOS/Linux  
+./backup.sh clean
+```
+
+## Data Persistence (Legacy/Development)
+
+For development or direct file access, you can use the override file:
+
+## Data Persistence (Legacy/Development)
+
+For development or direct file access, you can use the override file:
+
+```bash
+# Use bind mounts for development
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
+```
+
+This creates local directories that you can access directly:
+- `./data/` - Database files  
+- `./uploads/` - Uploaded files
+
+### Volume Management
+
+**View Volumes:**
+```bash
+docker volume ls | grep financial-analysis-tool
+```
+
+**Inspect Volume Contents:**
+```bash
+# Database volume
+docker run --rm -v financial-analysis-tool_app_data:/data alpine ls -la /data
+
+# Uploads volume
+docker run --rm -v financial-analysis-tool_app_uploads:/data alpine ls -la /data
+```
+
+**Manual Backup (Advanced):**
+```bash
+# Backup database volume
+docker run --rm -v financial-analysis-tool_app_data:/data -v $(pwd)/backups:/backup alpine tar czf /backup/manual_db.tar.gz -C /data .
+
+# Backup uploads volume  
+docker run --rm -v financial-analysis-tool_app_uploads:/data -v $(pwd)/backups:/backup alpine tar czf /backup/manual_uploads.tar.gz -C /data .
+```
 
 ## SSL/HTTPS Configuration
 
