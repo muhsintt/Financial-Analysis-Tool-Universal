@@ -36,31 +36,46 @@ def log_activity(action, description, details=None):
 @login_required
 def get_transactions():
     """Get all transactions with optional filters"""
-    category_id = request.args.get('category_id', type=int)
-    transaction_type = request.args.get('type')
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    include_excluded = request.args.get('include_excluded', 'false').lower() == 'true'
-    
-    # Filter by current user
-    query = Transaction.query.filter_by(user_id=session['user_id'])
-    
-    if category_id:
-        query = query.filter_by(category_id=category_id)
-    if transaction_type:
-        query = query.filter_by(type=transaction_type)
-    if not include_excluded:
-        query = query.filter_by(is_excluded=False)
-    
-    if start_date:
-        start = datetime.strptime(start_date, '%Y-%m-%d').date()
-        query = query.filter(Transaction.date >= start)
-    if end_date:
-        end = datetime.strptime(end_date, '%Y-%m-%d').date()
-        query = query.filter(Transaction.date <= end)
-    
-    transactions = query.order_by(Transaction.date.desc()).all()
-    return jsonify([t.to_dict() for t in transactions])
+    try:
+        category_id = request.args.get('category_id', type=int)
+        transaction_type = request.args.get('type')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        include_excluded = request.args.get('include_excluded', 'false').lower() == 'true'
+        
+        # Filter by current user
+        query = Transaction.query.filter_by(user_id=session['user_id'])
+        
+        if category_id:
+            query = query.filter_by(category_id=category_id)
+        if transaction_type:
+            query = query.filter_by(type=transaction_type)
+        if not include_excluded:
+            query = query.filter_by(is_excluded=False)
+        
+        if start_date:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            query = query.filter(Transaction.date >= start)
+        if end_date:
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+            query = query.filter(Transaction.date <= end)
+        
+        transactions = query.order_by(Transaction.date.desc()).all()
+        print(f"Found {len(transactions)} transactions for user {session['user_id']}")  # Debug log
+        
+        result = []
+        for t in transactions:
+            try:
+                result.append(t.to_dict())
+            except Exception as e:
+                print(f"Error serializing transaction {t.id}: {e}")  # Debug log
+                continue
+                
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Error in get_transactions: {e}")  # Debug log
+        return jsonify({'error': 'Internal server error'}), 500
 
 @transactions_bp.route('/<int:id>', methods=['GET'])
 @login_required

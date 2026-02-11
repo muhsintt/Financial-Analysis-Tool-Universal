@@ -1749,6 +1749,7 @@ async function loadTransactions() {
         if (!response.ok) throw new Error('Failed to load transactions');
 
         let transactions = await response.json();
+        console.log('Loaded transactions:', transactions.length, transactions); // Debug log
         
         // Filter by status (included/excluded)
         if (statusFilter === 'included') {
@@ -1757,6 +1758,7 @@ async function loadTransactions() {
             transactions = transactions.filter(t => t.is_excluded);
         }
         
+        console.log('Filtered transactions:', transactions.length, transactions); // Debug log
         state.transactions = transactions;
         // Apply current sort configuration
         sortTransactions(state.sortConfig.field);
