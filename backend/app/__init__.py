@@ -27,7 +27,16 @@ def create_app():
     app.config['UPLOAD_FOLDER'] = os.path.join(backend_dir, 'uploads')
     
     # Session configuration
-    app.config['SECRET_KEY'] = secrets.token_hex(32)
+    # Use consistent secret key based on environment or generate one that persists
+    secret_key = os.environ.get('SECRET_KEY')
+    if not secret_key:
+        # Generate consistent secret key based on data directory path
+        # This ensures the same key is used across app restarts
+        import hashlib
+        secret_source = f"{data_dir}_financial_analysis_tool_secret"
+        secret_key = hashlib.sha256(secret_source.encode()).hexdigest()
+    
+    app.config['SECRET_KEY'] = secret_key
     app.config['SESSION_TYPE'] = 'filesystem'
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
     

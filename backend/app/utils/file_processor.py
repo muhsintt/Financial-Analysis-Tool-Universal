@@ -8,7 +8,7 @@ def detect_transaction_type(description, amount):
         return 'expense'
     return 'income'
 
-def categorize_transaction(description, category_id=None):
+def categorize_transaction(description, category_id=None, user_id=None):
     """
     Automatically categorize transaction based on description using database rules.
     Falls back to rule-based matching if category_id not found.
@@ -17,16 +17,27 @@ def categorize_transaction(description, category_id=None):
     from app.models.categorization_rule import CategorizationRule
     from app.models.category import Category
     
-    # If category_id provided, validate it exists
-    if category_id:
+    # If category_id provided, validate it exists and belongs to user
+    if category_id and user_id:
+        category = Category.query.filter_by(id=category_id, user_id=user_id).first()
+        if category:
+            return category_id
+    elif category_id and not user_id:
+        # Fallback for cases where user_id is not provided
         category = Category.query.get(category_id)
         if category:
             return category_id
     
-    # Check categorization rules in priority order
-    rules = CategorizationRule.query.filter_by(is_active=True).order_by(
-        CategorizationRule.priority.desc()
-    ).all()
+    # Check categorization rules in priority order (filter by user if provided)
+    if user_id:
+        rules = CategorizationRule.query.filter_by(
+            is_active=True, 
+            user_id=user_id
+        ).order_by(CategorizationRule.priority.desc()).all()
+    else:
+        rules = CategorizationRule.query.filter_by(is_active=True).order_by(
+            CategorizationRule.priority.desc()
+        ).all()
     
     for rule in rules:
         if rule.matches(description):
@@ -51,16 +62,22 @@ def categorize_transaction(description, category_id=None):
     
     for category_name, keywords in category_map.items():
         if any(word in description_lower for word in keywords):
-            category = Category.query.filter_by(name=category_name).first()
+            if user_id:
+                category = Category.query.filter_by(name=category_name, user_id=user_id).first()
+            else:
+                category = Category.query.filter_by(name=category_name).first()
             if category:
                 return category.id
     
     # Default to 'Uncategorized'
-    default_category = Category.query.filter_by(name='Uncategorized').first()
+    if user_id:
+        default_category = Category.query.filter_by(name='Uncategorized', user_id=user_id).first()
+    else:
+        default_category = Category.query.filter_by(name='Uncategorized').first()
     return default_category.id if default_category else None
 
 
-def process_csv_file(filepath, limit=None):
+def process_csv_file(filepath, limit=None, user_id=None):
     """Process CSV file and extract transactions"""
     transactions = []
     
@@ -94,7 +111,7 @@ def process_csv_file(filepath, limit=None):
                 
                 trans_type = detect_transaction_type(desc, amount)
                 amount = abs(amount)  # Store as positive
-                category_id = categorize_transaction(desc)
+                category_id = categorize_transaction(desc, user_id=user_id)
                 
                 transactions.append({
                     'date': transaction_date,
@@ -109,7 +126,7 @@ def process_csv_file(filepath, limit=None):
     except Exception as e:
         raise Exception(f"Error processing CSV: {str(e)}")
 
-def process_excel_file(filepath, limit=None):
+def process_excel_file(filepath, limit=None, user_id=None):
     """Process Excel file and extract transactions"""
     transactions = []
     
@@ -190,7 +207,7 @@ def process_excel_file(filepath, limit=None):
             
             trans_type = detect_transaction_type(str(desc_val), amount)
             amount = abs(amount)
-            category_id = categorize_transaction(str(desc_val))
+            category_id = categorize_transaction(str(desc_val), user_id=user_id)
             
             transactions.append({
                 'date': transaction_date,

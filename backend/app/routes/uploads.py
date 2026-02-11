@@ -163,9 +163,9 @@ def upload_file():
         file_ext = file.filename.rsplit('.', 1)[1].lower()
         
         if file_ext == 'csv':
-            transactions_data = process_csv_file(filepath)
+            transactions_data = process_csv_file(filepath, user_id=session['user_id'])
         else:  # xlsx or xls
-            transactions_data = process_excel_file(filepath)
+            transactions_data = process_excel_file(filepath, user_id=session['user_id'])
         
         # Get uploaded_by from request (if provided)
         uploaded_by = request.form.get('uploaded_by', 'system')
@@ -266,9 +266,9 @@ def preview_file():
         file_ext = file.filename.rsplit('.', 1)[1].lower()
         
         if file_ext == 'csv':
-            preview_data = process_csv_file(filepath, limit=10)
+            preview_data = process_csv_file(filepath, limit=10, user_id=session['user_id'])
         else:
-            preview_data = process_excel_file(filepath, limit=10)
+            preview_data = process_excel_file(filepath, limit=10, user_id=session['user_id'])
 
         # Add category name for each preview row (for real bank statement format)
         from app.models.category import Category
