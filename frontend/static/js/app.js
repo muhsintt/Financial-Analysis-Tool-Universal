@@ -5189,3 +5189,91 @@ function initializeLogSettingsListeners() {
     // Load settings on init
     loadLogSettings();
 }
+
+// Modal Management Functions
+function openModal(modalId) {
+    console.log('Opening modal:', modalId);
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('show');
+        // Focus first input in modal
+        const firstInput = modal.querySelector('input:not([type="hidden"]), select, textarea');
+        if (firstInput) {
+            setTimeout(() => firstInput.focus(), 100);
+        }
+    } else {
+        console.error('Modal not found:', modalId);
+    }
+}
+
+function closeModal(modalId) {
+    console.log('Closing modal:', modalId);
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('show');
+    } else {
+        console.error('Modal not found:', modalId);
+    }
+}
+
+// Notification Functions
+function showNotification(message, type = 'info', duration = 3000) {
+    console.log('Notification:', message, type);
+    
+    // Remove existing notifications
+    const existingNotifications = document.querySelectorAll('.notification');
+    existingNotifications.forEach(notif => notif.remove());
+    
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    // Style the notification
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 5px;
+        color: white;
+        font-weight: 500;
+        z-index: 9999;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transform: translateX(400px);
+        transition: transform 0.3s ease-in-out;
+    `;
+    
+    // Set background color based on type
+    switch (type) {
+        case 'success':
+            notification.style.backgroundColor = '#27ae60';
+            break;
+        case 'error':
+            notification.style.backgroundColor = '#e74c3c';
+            break;
+        case 'warning':
+            notification.style.backgroundColor = '#f39c12';
+            break;
+        default:
+            notification.style.backgroundColor = '#3498db';
+    }
+    
+    // Add to document
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 10);
+    
+    // Auto remove
+    setTimeout(() => {
+        notification.style.transform = 'translateX(400px)';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 300);
+    }, duration);
+}

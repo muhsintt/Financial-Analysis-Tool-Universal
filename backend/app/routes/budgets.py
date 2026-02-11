@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.budget import Budget
 from app.models.category import Category
