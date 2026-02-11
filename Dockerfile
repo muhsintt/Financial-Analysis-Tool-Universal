@@ -25,6 +25,9 @@ RUN pip install --no-cache-dir gunicorn
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+
 # Create necessary directories
 RUN mkdir -p /app/backend/data /app/backend/uploads
 
@@ -36,7 +39,9 @@ EXPOSE 5000
 
 # Create a non-root user for security
 RUN adduser --disabled-password --gecos '' appuser && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chmod -R 755 /app/backend/data /app/backend/uploads && \
+    chmod +x /docker-entrypoint.sh
 
 USER appuser
 
@@ -44,5 +49,6 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/status')" || exit 1
 
-# Run the application with gunicorn
+# Set entrypoint and default command
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "4", "run:app"]
