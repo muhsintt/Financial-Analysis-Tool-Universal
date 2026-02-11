@@ -13,7 +13,8 @@ def get_budgets():
     period = request.args.get('period')
     for_excluded = request.args.get('for_excluded', 'false').lower() == 'true'
     
-    query = Budget.query
+    # Filter by current user
+    query = Budget.query.filter_by(user_id=session['user_id'])
     
     if period:
         query = query.filter_by(period=period)
@@ -36,9 +37,14 @@ def create_budget():
     if data['period'] not in ['daily', 'weekly', 'monthly', 'annual']:
         return jsonify({'error': 'Invalid period'}), 400
     
-    category = Category.query.get(data['category_id'])
+    # Verify category exists and user has access
+    current_user_id = session['user_id']
+    category = Category.query.filter(
+        Category.id == data['category_id'],
+        (Category.user_id == current_user_id) | (Category.user_id.is_(None))
+    ).first()
     if not category:
-        return jsonify({'error': 'Category not found'}), 404
+        return jsonify({'error': 'Category not found or access denied'}), 404
     
     budget = Budget(
         category_id=data['category_id'],
@@ -47,7 +53,8 @@ def create_budget():
         year=int(data['year']),
         month=data.get('month'),
         week=data.get('week'),
-        for_excluded=data.get('for_excluded', False)
+        for_excluded=data.get('for_excluded', False),
+        user_id=current_user_id  # Associate with current user
     )
     
     db.session.add(budget)
@@ -58,14 +65,14 @@ def create_budget():
 @budgets_bp.route('/<int:id>', methods=['GET'])
 def get_budget(id):
     """Get a specific budget"""
-    budget = Budget.query.get_or_404(id)
+    budget = Budget.query.filter_by(id=id, user_id=session['user_id']).first_or_404()
     return jsonify(budget.to_dict())
 
 @budgets_bp.route('/<int:id>', methods=['PUT'])
 @write_required
 def update_budget(id):
     """Update a budget"""
-    budget = Budget.query.get_or_404(id)
+    budget = Budget.query.filter_by(id=id, user_id=session['user_id']).first_or_404()
     data = request.get_json()
     
     if 'amount' in data:
@@ -81,6 +88,8 @@ def update_budget(id):
 @budgets_bp.route('/<int:id>', methods=['DELETE'])
 @write_required
 def delete_budget(id):
+    """Delete a budget"""
+    budget = Budget.query.filter_by(id=id, user_id=session['user_id']).first_or_404()
     """Delete a budget"""
     budget = Budget.query.get_or_404(id)
     db.session.delete(budget)

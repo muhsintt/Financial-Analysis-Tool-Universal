@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.categorization_rule import CategorizationRule
 from app.models.category import Category
@@ -11,16 +11,24 @@ rules_bp = Blueprint('rules', __name__, url_prefix='/api/rules')
 @write_required
 def apply_rules():
     """Apply all active rules to existing transactions"""
-    # Get all active rules ordered by priority
-    rules = CategorizationRule.query.filter_by(is_active=True).order_by(
+    current_user_id = session['user_id']
+    
+    # Get all active rules for current user + system rules ordered by priority
+    rules = CategorizationRule.query.filter(
+        db.or_(
+            CategorizationRule.user_id == current_user_id,
+            CategorizationRule.user_id.is_(None)  # System rules
+        ),
+        CategorizationRule.is_active == True
+    ).order_by(
         CategorizationRule.priority.desc()
     ).all()
     
     if not rules:
         return jsonify({'message': 'No active rules found', 'updated': 0}), 200
     
-    # Get all transactions
-    transactions = Transaction.query.all()
+    # Get all transactions for current user
+    transactions = Transaction.query.filter_by(user_id=current_user_id).all()
     
     updated_count = 0
     updated_transactions = []
@@ -52,8 +60,14 @@ def apply_rules():
 
 @rules_bp.route('/', methods=['GET'])
 def get_rules():
-    """Get all categorization rules"""
-    rules = CategorizationRule.query.order_by(
+    """Get all categorization rules (user rules + system rules)"""
+    current_user_id = session['user_id']
+    rules = CategorizationRule.query.filter(
+        db.or_(
+            CategorizationRule.user_id == current_user_id,
+            CategorizationRule.user_id.is_(None)  # System rules
+        )
+    ).order_by(
         CategorizationRule.priority.desc(),
         CategorizationRule.created_at.desc()
     ).all()
@@ -61,8 +75,15 @@ def get_rules():
 
 @rules_bp.route('/<int:id>', methods=['GET'])
 def get_rule(id):
-    """Get a specific rule"""
-    rule = CategorizationRule.query.get_or_404(id)
+    """Get a specific rule (user rule or system rule)"""
+    current_user_id = session['user_id']
+    rule = CategorizationRule.query.filter(
+        CategorizationRule.id == id,
+        db.or_(
+            CategorizationRule.user_id == current_user_id,
+            CategorizationRule.user_id.is_(None)  # System rules
+        )
+    ).first_or_404()
     return jsonify(rule.to_dict())
 
 @rules_bp.route('/', methods=['POST'])
@@ -75,13 +96,20 @@ def create_rule():
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
     
-    # Verify category exists
-    category = Category.query.get(data['category_id'])
+    # Verify category exists and user has access
+    current_user_id = session['user_id']
+    category = Category.query.filter(
+        Category.id == data['category_id'],
+        (Category.user_id == current_user_id) | (Category.user_id.is_(None))
+    ).first()
     if not category:
-        return jsonify({'error': 'Category not found'}), 404
+        return jsonify({'error': 'Category not found or access denied'}), 404
     
-    # Check for duplicate names
-    existing = CategorizationRule.query.filter_by(name=data['name']).first()
+    # Check for duplicate names within user's scope
+    existing = CategorizationRule.query.filter_by(
+        name=data['name'], 
+        user_id=current_user_id
+    ).first()
     if existing:
         return jsonify({'error': 'Rule name already exists'}), 400
     
@@ -90,7 +118,8 @@ def create_rule():
         keywords=data['keywords'],
         category_id=data['category_id'],
         priority=data.get('priority', 0),
-        is_active=data.get('is_active', True)
+        is_active=data.get('is_active', True),
+        user_id=current_user_id  # Associate with current user
     )
     
     db.session.add(rule)
@@ -101,21 +130,34 @@ def create_rule():
 @rules_bp.route('/<int:id>', methods=['PUT'])
 @write_required
 def update_rule(id):
-    """Update a categorization rule"""
-    rule = CategorizationRule.query.get_or_404(id)
+    """Update a categorization rule (only user rules can be updated)"""
+    current_user_id = session['user_id']
+    rule = CategorizationRule.query.filter_by(
+        id=id, 
+        user_id=current_user_id  # Only allow updates to user rules
+    ).first_or_404()
     data = request.get_json()
     
     # Check for duplicate names if name is being changed
     if 'name' in data and data['name'] != rule.name:
-        existing = CategorizationRule.query.filter_by(name=data['name']).first()
+        existing = CategorizationRule.query.filter_by(
+            name=data['name'], 
+            user_id=current_user_id
+        ).first()
         if existing:
             return jsonify({'error': 'Rule name already exists'}), 400
     
-    # Verify category exists if being changed
+    # Verify category exists and user has access if being changed
     if 'category_id' in data:
-        category = Category.query.get(data['category_id'])
+        category = Category.query.filter(
+            Category.id == data['category_id'],
+            db.or_(
+                Category.user_id == current_user_id,
+                Category.user_id.is_(None)  # System categories
+            )
+        ).first()
         if not category:
-            return jsonify({'error': 'Category not found'}), 404
+            return jsonify({'error': 'Category not found or access denied'}), 404
         rule.category_id = data['category_id']
     
     if 'name' in data:
@@ -134,8 +176,13 @@ def update_rule(id):
 @rules_bp.route('/<int:id>', methods=['DELETE'])
 @write_required
 def delete_rule(id):
-    """Delete a categorization rule"""
-    rule = CategorizationRule.query.get_or_404(id)
+    """Delete a categorization rule (only user rules can be deleted)"""
+    current_user_id = session['user_id']
+    rule = CategorizationRule.query.filter_by(
+        id=id, 
+        user_id=current_user_id  # Only allow deletion of user rules
+    ).first_or_404()
+    
     db.session.delete(rule)
     db.session.commit()
     
@@ -151,8 +198,15 @@ def test_rule():
     
     description = data['description']
     
-    # Test against all active rules
-    rules = CategorizationRule.query.filter_by(is_active=True).order_by(
+    # Test against all active rules (user rules + system rules)
+    current_user_id = session['user_id']
+    rules = CategorizationRule.query.filter(
+        db.or_(
+            CategorizationRule.user_id == current_user_id,
+            CategorizationRule.user_id.is_(None)  # System rules
+        ),
+        CategorizationRule.is_active == True
+    ).order_by(
         CategorizationRule.priority.desc()
     ).all()
     

@@ -12,8 +12,12 @@ class Budget(db.Model):
     month = db.Column(db.Integer)  # 1-12 for monthly budgets
     week = db.Column(db.Integer)  # ISO week number for weekly budgets
     for_excluded = db.Column(db.Boolean, default=False)  # Budget for excluded expenses
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # User isolation
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='budgets')
     
     def __repr__(self):
         return f'<Budget {self.category.name if self.category else "Unknown"} - {self.amount}>'

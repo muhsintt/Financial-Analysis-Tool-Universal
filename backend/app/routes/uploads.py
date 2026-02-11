@@ -39,20 +39,23 @@ def log_activity(action, description, details=None):
 @uploads_bp.route('/', methods=['GET'])
 def get_uploads():
     """Get all upload records"""
-    uploads = Upload.query.order_by(Upload.created_at.desc()).all()
+    uploads = Upload.query.filter_by(user_id=session['user_id']).order_by(Upload.created_at.desc()).all()
     return jsonify([u.to_dict() for u in uploads])
 
 @uploads_bp.route('/<int:upload_id>', methods=['GET'])
 def get_upload(upload_id):
     """Get a specific upload record"""
-    upload = Upload.query.get_or_404(upload_id)
+    upload = Upload.query.filter_by(id=upload_id, user_id=session['user_id']).first_or_404()
     return jsonify(upload.to_dict())
 
 @uploads_bp.route('/<int:upload_id>/transactions', methods=['GET'])
 def get_upload_transactions(upload_id):
     """Get all transactions for a specific upload"""
-    upload = Upload.query.get_or_404(upload_id)
-    transactions = Transaction.query.filter_by(upload_id=upload_id).order_by(Transaction.date.desc()).all()
+    upload = Upload.query.filter_by(id=upload_id, user_id=session['user_id']).first_or_404()
+    transactions = Transaction.query.filter_by(
+        upload_id=upload_id, 
+        user_id=session['user_id']
+    ).order_by(Transaction.date.desc()).all()
     return jsonify({
         'upload': upload.to_dict(),
         'transactions': [t.to_dict() for t in transactions]

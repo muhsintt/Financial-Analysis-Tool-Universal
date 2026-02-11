@@ -17,6 +17,7 @@ A comprehensive, fully-functional expense tracking and budget management applica
 ✅ **Local Database** - SQLite for secure local data storage
 ✅ **Responsive Design** - Works on desktop, tablet, and mobile devices
 ✅ **User Authentication** - Secure login with superuser and standard roles
+✅ **User Data Isolation** - Complete data separation between users
 
 ## System Requirements
 
@@ -145,6 +146,48 @@ The script will:
 
 1. The application automatically opens in your browser at `http://localhost:5000`
 2. Default categories are created automatically (Groceries, Restaurants, etc.)
+3. Create your first user account to get started
+
+### User Authentication & Isolation
+
+The application supports multiple users with complete data isolation:
+
+#### Creating Users
+- First user is automatically created as a superuser
+- Login with username/password to access your personal dashboard
+- Each user has their own isolated data (transactions, budgets, categories, uploads, etc.)
+
+#### User Data Isolation
+By default, all user data is completely isolated:
+- **Transactions**: Each user only sees their own transactions
+- **Categories**: Users have their own categories + shared system categories
+- **Budgets**: Personal budgets that don't affect other users
+- **File Uploads**: Private file uploads and processing
+- **Categorization Rules**: Personal automation rules
+
+#### Enable User Isolation (One-time Setup)
+If you want complete user data separation, run the user isolation setup:
+
+**Windows:**
+```batch
+setup-user-isolation.bat
+```
+
+**macOS/Linux:**
+```bash
+./setup-user-isolation.sh
+```
+
+This setup will:
+- Add user isolation to all existing data
+- Migrate current data to the first user
+- Ensure each user only sees their own information
+- Create default categories for new users
+
+#### Managing Users
+- Superusers can manage other users and access all data
+- Standard users can only access their own data
+- User sessions are secure and isolated
 
 ### Dashboard
 

@@ -100,6 +100,11 @@ def create_user():
     db.session.add(user)
     db.session.commit()
     
+    # Create default categories for new user
+    from app.utils.user_isolation import create_default_categories_for_user
+    if not create_default_categories_for_user(user.id):
+        print(f"Warning: Failed to create default categories for user {user.id}")
+    
     # Log user creation
     log_activity(
         ActivityLog.ACTION_CREATE,

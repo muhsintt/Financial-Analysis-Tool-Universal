@@ -11,12 +11,14 @@ class Category(db.Model):
     icon = db.Column(db.String(50), default='folder')
     is_default = db.Column(db.Boolean, default=False)
     parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # NULL for system categories
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Self-referential relationship for subcategories
     subcategories = db.relationship('Category', backref=db.backref('parent', remote_side=[id]), lazy=True)
     
     # Relationships
+    user = db.relationship('User', backref='categories')
     transactions = db.relationship('Transaction', backref='category', lazy=True, cascade='all, delete-orphan')
     budgets = db.relationship('Budget', backref='category', lazy=True, cascade='all, delete-orphan')
     

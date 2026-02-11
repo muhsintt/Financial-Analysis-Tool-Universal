@@ -41,7 +41,8 @@ def get_transactions():
     end_date = request.args.get('end_date')
     include_excluded = request.args.get('include_excluded', 'false').lower() == 'true'
     
-    query = Transaction.query
+    # Filter by current user
+    query = Transaction.query.filter_by(user_id=session['user_id'])
     
     if category_id:
         query = query.filter_by(category_id=category_id)
@@ -63,7 +64,7 @@ def get_transactions():
 @transactions_bp.route('/<int:id>', methods=['GET'])
 def get_transaction(id):
     """Get a specific transaction"""
-    transaction = Transaction.query.get_or_404(id)
+    transaction = Transaction.query.filter_by(id=id, user_id=session['user_id']).first_or_404()
     return jsonify(transaction.to_dict())
 
 @transactions_bp.route('/', methods=['POST'])
@@ -90,6 +91,7 @@ def create_transaction():
         type=data['type'],
         date=datetime.strptime(data['date'], '%Y-%m-%d').date(),
         category_id=data['category_id'],
+        user_id=session['user_id'],  # Associate with current user
         notes=data.get('notes', '')
     )
     
@@ -109,7 +111,7 @@ def create_transaction():
 @write_required
 def update_transaction(id):
     """Update a transaction"""
-    transaction = Transaction.query.get_or_404(id)
+    transaction = Transaction.query.filter_by(id=id, user_id=session['user_id']).first_or_404()
     data = request.get_json()
     
     if 'description' in data:
@@ -145,7 +147,7 @@ def update_transaction(id):
 @write_required
 def delete_transaction(id):
     """Delete a transaction"""
-    transaction = Transaction.query.get_or_404(id)
+    transaction = Transaction.query.filter_by(id=id, user_id=session['user_id']).first_or_404()
     desc = transaction.description[:50]
     amount = transaction.amount
     db.session.delete(transaction)

@@ -13,9 +13,13 @@ class Transaction(db.Model):
     is_excluded = db.Column(db.Boolean, default=False)
     source = db.Column(db.String(100), default='manual')  # 'manual' or 'upload'
     upload_id = db.Column(db.Integer, db.ForeignKey('uploads.id'), nullable=True)  # Link to upload
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # User isolation
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='transactions')
     
     def __repr__(self):
         return f'<Transaction {self.description} - {self.amount}>'

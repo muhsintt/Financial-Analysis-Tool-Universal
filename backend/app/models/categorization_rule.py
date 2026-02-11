@@ -10,10 +10,12 @@ class CategorizationRule(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
     priority = db.Column(db.Integer, default=0)  # Higher priority = checked first
     is_active = db.Column(db.Boolean, default=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # User isolation - nullable for system rules
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationship
+    # Relationships
+    user = db.relationship('User', backref='categorization_rules')
     category = db.relationship('Category', backref='categorization_rules')
     
     def __repr__(self):

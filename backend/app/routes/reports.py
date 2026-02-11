@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.transaction import Transaction
 from app.models.budget import Budget
@@ -73,10 +73,11 @@ def get_summary():
     
     start_date, end_date = get_date_range(period, year, month, calendar_type=calendar_type)
     
-    # Get all transactions in the date range
+    # Get all transactions in the date range for current user
     all_transactions = Transaction.query.filter(
         Transaction.date >= start_date,
-        Transaction.date <= end_date
+        Transaction.date <= end_date,
+        Transaction.user_id == session['user_id']
     ).all()
     
     # Calculate totals for all transactions (included + excluded)

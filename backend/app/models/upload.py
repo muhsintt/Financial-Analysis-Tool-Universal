@@ -15,12 +15,13 @@ class Upload(db.Model):
     file_size = db.Column(db.Integer, default=0)  # Size in bytes
     file_type = db.Column(db.String(50))  # csv, xlsx, xls
     transaction_count = db.Column(db.Integer, default=0)
-    uploaded_by = db.Column(db.String(100), default='system')
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # User isolation
     status = db.Column(db.String(50), default='completed')  # pending, completed, failed
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Relationship to transactions
+    # Relationships
+    user = db.relationship('User', backref='uploads')
     transactions = db.relationship('Transaction', backref='upload', lazy='dynamic')
     
     def to_dict(self):
@@ -32,7 +33,8 @@ class Upload(db.Model):
             'file_size_formatted': self.format_file_size(),
             'file_type': self.file_type,
             'transaction_count': self.transaction_count,
-            'uploaded_by': self.uploaded_by,
+            'uploaded_by': self.user.username if self.user else 'system',
+            'user_id': self.user_id,
             'status': self.status,
             'notes': self.notes,
             'created_at': self.created_at.isoformat() if self.created_at else None

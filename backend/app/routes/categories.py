@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.category import Category
 from app.routes.auth import write_required
@@ -24,21 +24,30 @@ def get_categories():
     parents_only = request.args.get('parents_only', 'false').lower() == 'true'
     flat = request.args.get('flat', 'false').lower() == 'true'
     
+    # Show system categories (user_id IS NULL) and current user's categories
+    current_user_id = session['user_id']
+    base_query = Category.query.filter(
+        (Category.user_id == current_user_id) | (Category.user_id.is_(None))
+    )
+    
     if parents_only:
         # Only return top-level categories (no parent)
-        categories = Category.query.filter_by(parent_id=None).all()
+        categories = base_query.filter_by(parent_id=None).all()
     else:
-        categories = Category.query.all()
+        categories = base_query.all()
     
     if flat:
         # Return flat list with full names for dropdowns
         result = []
-        for cat in Category.query.filter_by(parent_id=None).all():
+        parent_categories = base_query.filter_by(parent_id=None).all()
+        for cat in parent_categories:
             result.append(cat.to_dict())
             for sub in cat.subcategories:
-                sub_dict = sub.to_dict()
-                sub_dict['display_name'] = f"{cat.name} > {sub.name}"
-                result.append(sub_dict)
+                # Only include subcategories the user can access
+                if sub.user_id is None or sub.user_id == current_user_id:
+                    sub_dict = sub.to_dict()
+                    sub_dict['display_name'] = f"{cat.name} > {sub.name}"
+                    result.append(sub_dict)
         return jsonify(result)
     
     return jsonify([cat.to_dict(include_subcategories=include_subs) for cat in categories])
@@ -46,8 +55,18 @@ def get_categories():
 @categories_bp.route('/<int:id>/subcategories', methods=['GET'])
 def get_subcategories(id):
     """Get all subcategories of a category"""
-    category = Category.query.get_or_404(id)
-    return jsonify([sub.to_dict() for sub in category.subcategories])
+    current_user_id = session['user_id']
+    category = Category.query.filter(
+        Category.id == id,
+        (Category.user_id == current_user_id) | (Category.user_id.is_(None))
+    ).first_or_404()
+    
+    # Filter subcategories by user access
+    accessible_subs = [
+        sub for sub in category.subcategories 
+        if sub.user_id is None or sub.user_id == current_user_id
+    ]
+    return jsonify([sub.to_dict() for sub in accessible_subs])
 
 @categories_bp.route('/type/<type>', methods=['GET'])
 def get_categories_by_type(type):
@@ -58,10 +77,17 @@ def get_categories_by_type(type):
     parents_only = request.args.get('parents_only', 'false').lower() == 'true'
     include_subs = request.args.get('include_subcategories', 'false').lower() == 'true'
     
+    # Show system categories and current user's categories
+    current_user_id = session['user_id']
+    base_query = Category.query.filter(
+        Category.type == type,
+        (Category.user_id == current_user_id) | (Category.user_id.is_(None))
+    )
+    
     if parents_only:
-        categories = Category.query.filter_by(type=type, parent_id=None).all()
+        categories = base_query.filter_by(parent_id=None).all()
     else:
-        categories = Category.query.filter_by(type=type).all()
+        categories = base_query.all()
     
     return jsonify([cat.to_dict(include_subcategories=include_subs) for cat in categories])
 
@@ -75,12 +101,16 @@ def create_category():
         return jsonify({'error': 'Name is required'}), 400
     
     parent_id = data.get('parent_id')
+    current_user_id = session['user_id']
     
-    # If parent_id is provided, inherit type from parent
+    # If parent_id is provided, inherit type from parent and check access
     if parent_id:
-        parent = Category.query.get(parent_id)
+        parent = Category.query.filter(
+            Category.id == parent_id,
+            (Category.user_id == current_user_id) | (Category.user_id.is_(None))
+        ).first()
         if not parent:
-            return jsonify({'error': 'Parent category not found'}), 404
+            return jsonify({'error': 'Parent category not found or access denied'}), 404
         if parent.parent_id:
             return jsonify({'error': 'Cannot create subcategory of a subcategory (only one level allowed)'}), 400
         category_type = parent.type
@@ -91,9 +121,13 @@ def create_category():
             return jsonify({'error': 'Type must be income or expense'}), 400
         category_type = data['type']
     
-    # Check for duplicate name within the same parent
-    existing = Category.query.filter_by(name=data['name'], parent_id=parent_id).first()
-    if existing:
+    # Check for duplicate name within the same parent in user's scope
+    existing_query = Category.query.filter(
+        Category.name == data['name'],
+        Category.parent_id == parent_id,
+        Category.user_id == current_user_id
+    ).first()
+    if existing_query:
         if parent_id:
             return jsonify({'error': 'Subcategory with this name already exists in this category'}), 409
         else:
@@ -104,7 +138,8 @@ def create_category():
         type=category_type,
         color=data.get('color', '#3498db'),
         icon=data.get('icon', 'folder'),
-        parent_id=parent_id
+        parent_id=parent_id,
+        user_id=current_user_id  # Associate with current user
     )
     
     db.session.add(category)
