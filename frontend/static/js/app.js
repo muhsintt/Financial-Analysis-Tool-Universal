@@ -458,6 +458,9 @@ function showMainApp() {
     // Apply calendar preference filtering
     applyCalendarPreference();
     
+    // Ensure we always start on dashboard after login
+    navigateTo('dashboard');
+    
     // Initialize the rest of the app
     initializeApp();
 }
@@ -605,6 +608,7 @@ async function handleLogin(e) {
         
         state.isAuthenticated = true;
         state.currentUser = data.user;
+        state.currentPage = 'dashboard';  // Always start on dashboard after login
         showMainApp();
         
     } catch (error) {
@@ -626,6 +630,7 @@ async function handleLogout() {
     
     state.isAuthenticated = false;
     state.currentUser = null;
+    state.currentPage = 'dashboard';  // Reset to dashboard on logout
     document.body.classList.remove('read-only');
     showLoginScreen();
     
