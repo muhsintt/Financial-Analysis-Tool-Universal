@@ -1769,15 +1769,22 @@ async function loadTransactions() {
 
 // Display Transactions
 function displayTransactions(transactions) {
+    console.log('displayTransactions called with:', transactions.length, 'transactions'); // Debug log
     const tbody = document.getElementById('transactionsBody');
-    tbody.innerHTML = transactions.map(t => `
+    if (!tbody) {
+        console.error('transactionsBody element not found!');
+        return;
+    }
+    
+    console.log('tbody element found, generating HTML...'); // Debug log
+    const html = transactions.map(t => `
         <tr class="transaction-row" data-id="${t.id}">
             <td class="checkbox-col">
                 <input type="checkbox" class="transaction-checkbox" value="${t.id}" onchange="updateBulkDeleteToolbar()">
             </td>
             <td>${formatDateWithCalendar(t.date)}</td>
             <td>${t.description}</td>
-            <td>${t.category_name}</td>
+            <td>${t.category_name || 'Unknown'}</td>
             <td><span class="tag ${t.type}">${t.type}</span></td>
             <td class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</td>
             <td><span class="tag ${t.is_excluded ? 'excluded' : 'included'}">${t.is_excluded ? 'Excluded' : 'Included'}</span></td>
@@ -1793,10 +1800,22 @@ function displayTransactions(transactions) {
             </td>
         </tr>
     `).join('');
+    
+    console.log('Generated HTML length:', html.length); // Debug log
+    tbody.innerHTML = html;
+    console.log('HTML set to tbody'); // Debug log
 }
 
 // Sort Transactions
 function sortTransactions(field) {
+    console.log('sortTransactions called with field:', field, 'state.transactions:', state.transactions?.length); // Debug log
+    
+    if (!state.transactions || state.transactions.length === 0) {
+        console.log('No transactions to sort');
+        displayTransactions([]);
+        return;
+    }
+    
     // Toggle direction if clicking the same field
     if (state.sortConfig.field === field) {
         state.sortConfig.direction = state.sortConfig.direction === 'asc' ? 'desc' : 'asc';
@@ -1804,6 +1823,8 @@ function sortTransactions(field) {
         state.sortConfig.field = field;
         state.sortConfig.direction = 'asc';
     }
+    
+    console.log('Sorting by:', field, 'direction:', state.sortConfig.direction); // Debug log
     
     // Sort the transactions
     const sorted = [...state.transactions].sort((a, b) => {
@@ -1851,6 +1872,7 @@ function sortTransactions(field) {
         }
     });
     
+    console.log('About to display sorted transactions:', sorted.length); // Debug log
     // Display sorted transactions
     displayTransactions(sorted);
 }
