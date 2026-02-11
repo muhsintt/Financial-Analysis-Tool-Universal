@@ -1733,10 +1733,24 @@ function updateCategoryBreakdown(expenseData, incomeData) {
 
 // Load Transactions
 async function loadTransactions() {
+    console.log('=== loadTransactions() START ===');
+    
     try {
-        const typeFilter = document.getElementById('typeFilter').value;
-        const categoryFilter = document.getElementById('categoryFilter').value;
-        const statusFilter = document.getElementById('statusFilter').value;
+        // Check if we have the required DOM elements
+        const typeFilterEl = document.getElementById('typeFilter');
+        const categoryFilterEl = document.getElementById('categoryFilter');
+        const statusFilterEl = document.getElementById('statusFilter');
+        const transactionsBodyEl = document.getElementById('transactionsBody');
+        
+        console.log('DOM elements check:');
+        console.log('- typeFilter:', typeFilterEl ? 'found' : 'NOT FOUND');
+        console.log('- categoryFilter:', categoryFilterEl ? 'found' : 'NOT FOUND');
+        console.log('- statusFilter:', statusFilterEl ? 'found' : 'NOT FOUND');
+        console.log('- transactionsBody:', transactionsBodyEl ? 'found' : 'NOT FOUND');
+        
+        const typeFilter = typeFilterEl ? typeFilterEl.value : '';
+        const categoryFilter = categoryFilterEl ? categoryFilterEl.value : '';
+        const statusFilter = statusFilterEl ? statusFilterEl.value : '';
 
         const params = new URLSearchParams({
             include_excluded: true
@@ -1745,74 +1759,119 @@ async function loadTransactions() {
         if (typeFilter) params.append('type', typeFilter);
         if (categoryFilter) params.append('category_id', categoryFilter);
 
-        const response = await apiFetch(`${API_URL}/transactions/?${params}`);
-        if (!response.ok) throw new Error('Failed to load transactions');
+        const fullUrl = `${API_URL}/transactions/?${params}`;
+        console.log('Making API call to:', fullUrl);
+        
+        const response = await apiFetch(fullUrl);
+        console.log('API Response status:', response.status);
+        console.log('API Response ok:', response.ok);
+        
+        if (!response.ok) throw new Error(`Failed to load transactions: ${response.status}`);
 
         let transactions = await response.json();
-        console.log('Loaded transactions:', transactions.length, transactions); // Debug log
+        console.log('Raw API response - transaction count:', transactions.length);
+        console.log('Raw API response - first transaction:', transactions[0]);
         
         // Filter by status (included/excluded)
         if (statusFilter === 'included') {
             transactions = transactions.filter(t => !t.is_excluded);
+            console.log('After filtering for included:', transactions.length);
         } else if (statusFilter === 'excluded') {
             transactions = transactions.filter(t => t.is_excluded);
+            console.log('After filtering for excluded:', transactions.length);
         }
         
-        console.log('Filtered transactions:', transactions.length, transactions); // Debug log
+        console.log('Final filtered transactions count:', transactions.length);
+        console.log('Setting state.transactions and calling sortTransactions...');
         state.transactions = transactions;
+        
         // Apply current sort configuration
         sortTransactions(state.sortConfig.field);
+        
+        console.log('=== loadTransactions() END ===');
     } catch (error) {
-        console.error('Error loading transactions:', error);
+        console.error('=== ERROR in loadTransactions() ===');
+        console.error('Error details:', error);
+        console.error('Error stack:', error.stack);
     }
 }
 
 // Display Transactions
 function displayTransactions(transactions) {
-    console.log('displayTransactions called with:', transactions.length, 'transactions'); // Debug log
+    console.log('=== displayTransactions() START ===');
+    console.log('Input transactions count:', transactions ? transactions.length : 'NULL/UNDEFINED');
+    console.log('Input transactions:', transactions);
+    
     const tbody = document.getElementById('transactionsBody');
+    console.log('transactionsBody element:', tbody);
     if (!tbody) {
-        console.error('transactionsBody element not found!');
+        console.error('CRITICAL ERROR: transactionsBody element not found!');
         return;
     }
     
-    console.log('tbody element found, generating HTML...'); // Debug log
-    const html = transactions.map(t => `
-        <tr class="transaction-row" data-id="${t.id}">
-            <td class="checkbox-col">
-                <input type="checkbox" class="transaction-checkbox" value="${t.id}" onchange="updateBulkDeleteToolbar()">
-            </td>
-            <td>${formatDateWithCalendar(t.date)}</td>
-            <td>${t.description}</td>
-            <td>${t.category_name || 'Unknown'}</td>
-            <td><span class="tag ${t.type}">${t.type}</span></td>
-            <td class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</td>
-            <td><span class="tag ${t.is_excluded ? 'excluded' : 'included'}">${t.is_excluded ? 'Excluded' : 'Included'}</span></td>
-            <td>
-                <div class="actions">
-                    <button class="btn-icon edit" title="Edit" onclick="editTransaction(${t.id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn-icon delete" title="Delete" onclick="deleteTransaction(${t.id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+    if (!transactions || transactions.length === 0) {
+        console.log('No transactions to display, setting empty HTML');
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center">No transactions found</td></tr>';
+        console.log('=== displayTransactions() END (empty) ===');
+        return;
+    }
     
-    console.log('Generated HTML length:', html.length); // Debug log
-    tbody.innerHTML = html;
-    console.log('HTML set to tbody'); // Debug log
+    console.log('Generating HTML for', transactions.length, 'transactions...');
+    
+    try {
+        const html = transactions.map((t, index) => {
+            console.log(`Processing transaction ${index + 1}:`, t);
+            return `
+            <tr class="transaction-row" data-id="${t.id}">
+                <td class="checkbox-col">
+                    <input type="checkbox" class="transaction-checkbox" value="${t.id}" onchange="updateBulkDeleteToolbar()">
+                </td>
+                <td>${formatDateWithCalendar(t.date)}</td>
+                <td>${escapeHtml(t.description)}</td>
+                <td>${escapeHtml(t.category_name || 'Unknown')}</td>
+                <td><span class="tag ${t.type}">${t.type}</span></td>
+                <td class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</td>
+                <td><span class="tag ${t.is_excluded ? 'excluded' : 'included'}">${t.is_excluded ? 'Excluded' : 'Included'}</span></td>
+                <td>
+                    <div class="actions">
+                        <button class="btn-icon edit" title="Edit" onclick="editTransaction(${t.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-icon delete" title="Delete" onclick="deleteTransaction(${t.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        }).join('');
+        
+        console.log('Generated HTML length:', html.length);
+        console.log('Generated HTML (first 500 chars):', html.substring(0, 500));
+        
+        tbody.innerHTML = html;
+        console.log('HTML successfully set to tbody');
+        console.log('tbody.children.length after setting:', tbody.children.length);
+        
+    } catch (error) {
+        console.error('ERROR generating HTML:', error);
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error displaying transactions</td></tr>';
+    }
+    
+    console.log('=== displayTransactions() END ===');
 }
 
 // Sort Transactions
 function sortTransactions(field) {
-    console.log('sortTransactions called with field:', field, 'state.transactions:', state.transactions?.length); // Debug log
+    console.log('=== sortTransactions() START ===');
+    console.log('Sort field:', field);
+    console.log('state.transactions count:', state.transactions?.length || 'NULL/UNDEFINED');
+    console.log('state.transactions:', state.transactions);
     
     if (!state.transactions || state.transactions.length === 0) {
-        console.log('No transactions to sort');
+        console.log('No transactions to sort, calling displayTransactions with empty array');
         displayTransactions([]);
+        console.log('=== sortTransactions() END (empty) ===');
         return;
     }
     
@@ -1824,57 +1883,67 @@ function sortTransactions(field) {
         state.sortConfig.direction = 'asc';
     }
     
-    console.log('Sorting by:', field, 'direction:', state.sortConfig.direction); // Debug log
+    console.log('Sort configuration:', state.sortConfig);
     
-    // Sort the transactions
-    const sorted = [...state.transactions].sort((a, b) => {
-        let valueA, valueB;
+    try {
+        // Sort the transactions
+        const sorted = [...state.transactions].sort((a, b) => {
+            let valueA, valueB;
+            
+            switch(field) {
+                case 'date':
+                    valueA = new Date(a.date);
+                    valueB = new Date(b.date);
+                    break;
+                case 'description':
+                    valueA = (a.description || '').toLowerCase();
+                    valueB = (b.description || '').toLowerCase();
+                    break;
+                case 'category':
+                    valueA = (a.category_name || '').toLowerCase();
+                    valueB = (b.category_name || '').toLowerCase();
+                    break;
+                case 'type':
+                    valueA = (a.type || '').toLowerCase();
+                    valueB = (b.type || '').toLowerCase();
+                    break;
+                case 'amount':
+                    valueA = a.amount || 0;
+                    valueB = b.amount || 0;
+                    break;
+                case 'status':
+                    valueA = a.is_excluded ? 1 : 0;
+                    valueB = b.is_excluded ? 1 : 0;
+                    break;
+                default:
+                    return 0;
+            }
+            
+            if (valueA < valueB) return state.sortConfig.direction === 'asc' ? -1 : 1;
+            if (valueA > valueB) return state.sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
         
-        switch(field) {
-            case 'date':
-                valueA = new Date(a.date);
-                valueB = new Date(b.date);
-                break;
-            case 'description':
-                valueA = a.description.toLowerCase();
-                valueB = b.description.toLowerCase();
-                break;
-            case 'category':
-                valueA = a.category_name.toLowerCase();
-                valueB = b.category_name.toLowerCase();
-                break;
-            case 'type':
-                valueA = a.type.toLowerCase();
-                valueB = b.type.toLowerCase();
-                break;
-            case 'amount':
-                valueA = a.amount;
-                valueB = b.amount;
-                break;
-            case 'status':
-                valueA = a.is_excluded ? 1 : 0;
-                valueB = b.is_excluded ? 1 : 0;
-                break;
-            default:
-                return 0;
-        }
+        console.log('Sorted transactions count:', sorted.length);
+        console.log('First sorted transaction:', sorted[0]);
         
-        if (valueA < valueB) return state.sortConfig.direction === 'asc' ? -1 : 1;
-        if (valueA > valueB) return state.sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-    });
+        // Update UI indicators
+        document.querySelectorAll('table th.sortable').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+            if (th.dataset.sortField === field) {
+                th.classList.add(`sort-${state.sortConfig.direction}`);
+            }
+        });
+        
+        console.log('Calling displayTransactions with sorted data...');
+        displayTransactions(sorted);
+        
+    } catch (error) {
+        console.error('ERROR in sortTransactions:', error);
+        displayTransactions([]);
+    }
     
-    // Update UI indicators
-    document.querySelectorAll('table th.sortable').forEach(th => {
-        th.classList.remove('sort-asc', 'sort-desc');
-        if (th.dataset.sortField === field) {
-            th.classList.add(`sort-${state.sortConfig.direction}`);
-        }
-    });
-    
-    console.log('About to display sorted transactions:', sorted.length); // Debug log
-    // Display sorted transactions
-    displayTransactions(sorted);
+    console.log('=== sortTransactions() END ===');
 }
 
 // Filter Transactions
@@ -4775,6 +4844,36 @@ async function loadActivityLogs() {
 function formatDateTime(dateString) {
     const date = new Date(dateString);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// Format date with calendar preference (Gregorian or Badi)
+function formatDateWithCalendar(dateString) {
+    try {
+        if (!dateString) return 'N/A';
+        
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Invalid Date';
+        
+        // Check if we should use Badi calendar
+        const calendarType = state.calendarType || 'gregorian';
+        
+        if (calendarType === 'badi') {
+            try {
+                const badiDate = gregorianToBadi(date);
+                return formatBadiDate(badiDate.year, badiDate.month, badiDate.day);
+            } catch (error) {
+                console.warn('Error formatting Badi date:', error);
+                // Fallback to Gregorian if Badi conversion fails
+                return date.toLocaleDateString();
+            }
+        } else {
+            // Use Gregorian calendar
+            return date.toLocaleDateString();
+        }
+    } catch (error) {
+        console.error('Error in formatDateWithCalendar:', error);
+        return 'Error';
+    }
 }
 
 function updateActivityPagination(data) {
