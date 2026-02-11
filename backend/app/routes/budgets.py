@@ -2,12 +2,13 @@ from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.budget import Budget
 from app.models.category import Category
-from app.routes.auth import write_required
+from app.routes.auth import write_required, login_required
 from datetime import datetime, date
 
 budgets_bp = Blueprint('budgets', __name__, url_prefix='/api/budgets')
 
 @budgets_bp.route('/', methods=['GET'])
+@login_required
 def get_budgets():
     """Get all budgets with optional filters"""
     period = request.args.get('period')
@@ -63,6 +64,7 @@ def create_budget():
     return jsonify(budget.to_dict()), 201
 
 @budgets_bp.route('/<int:id>', methods=['GET'])
+@login_required
 def get_budget(id):
     """Get a specific budget"""
     budget = Budget.query.filter_by(id=id, user_id=session['user_id']).first_or_404()

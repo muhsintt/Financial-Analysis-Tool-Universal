@@ -5,7 +5,7 @@ from app.models.category import Category
 from app.models.upload import Upload
 from app.models.activity_log import ActivityLog
 from app.models.log_settings import LogSettings
-from app.routes.auth import write_required
+from app.routes.auth import write_required, login_required
 from app.utils.file_processor import process_excel_file, process_csv_file
 from datetime import datetime
 import os
@@ -37,18 +37,21 @@ def log_activity(action, description, details=None):
     db.session.commit()
 
 @uploads_bp.route('/', methods=['GET'])
+@login_required
 def get_uploads():
     """Get all upload records"""
     uploads = Upload.query.filter_by(user_id=session['user_id']).order_by(Upload.created_at.desc()).all()
     return jsonify([u.to_dict() for u in uploads])
 
 @uploads_bp.route('/<int:upload_id>', methods=['GET'])
+@login_required
 def get_upload(upload_id):
     """Get a specific upload record"""
     upload = Upload.query.filter_by(id=upload_id, user_id=session['user_id']).first_or_404()
     return jsonify(upload.to_dict())
 
 @uploads_bp.route('/<int:upload_id>/transactions', methods=['GET'])
+@login_required
 def get_upload_transactions(upload_id):
     """Get all transactions for a specific upload"""
     upload = Upload.query.filter_by(id=upload_id, user_id=session['user_id']).first_or_404()
@@ -62,6 +65,7 @@ def get_upload_transactions(upload_id):
     })
 
 @uploads_bp.route('/<int:upload_id>/download', methods=['GET'])
+@login_required
 def download_upload_transactions(upload_id):
     """Download transactions from a specific upload as CSV"""
     upload = Upload.query.get_or_404(upload_id)
@@ -247,6 +251,7 @@ def upload_file():
         return jsonify({'error': str(e)}), 400
 
 @uploads_bp.route('/preview', methods=['POST'])
+@login_required
 def preview_file():
     """Preview file contents before uploading"""
     if 'file' not in request.files:

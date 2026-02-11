@@ -4,7 +4,7 @@ from app.models.transaction import Transaction
 from app.models.category import Category
 from app.models.activity_log import ActivityLog
 from app.models.log_settings import LogSettings
-from app.routes.auth import write_required
+from app.routes.auth import write_required, login_required
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_, or_
 import json
@@ -33,6 +33,7 @@ def log_activity(action, description, details=None):
     db.session.commit()
 
 @transactions_bp.route('/', methods=['GET'])
+@login_required
 def get_transactions():
     """Get all transactions with optional filters"""
     category_id = request.args.get('category_id', type=int)
@@ -62,6 +63,7 @@ def get_transactions():
     return jsonify([t.to_dict() for t in transactions])
 
 @transactions_bp.route('/<int:id>', methods=['GET'])
+@login_required
 def get_transaction(id):
     """Get a specific transaction"""
     transaction = Transaction.query.filter_by(id=id, user_id=session['user_id']).first_or_404()

@@ -3,6 +3,7 @@ from app import db
 from app.models.transaction import Transaction
 from app.models.budget import Budget
 from app.models.category import Category
+from app.routes.auth import login_required
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
 import calendar
@@ -64,6 +65,7 @@ def get_date_range(period, year, month=None, week=None, calendar_type='gregorian
             return date.today(), date.today()
 
 @reports_bp.route('/summary', methods=['GET'])
+@login_required
 def get_summary():
     """Get financial summary"""
     period = request.args.get('period', 'monthly')
@@ -110,6 +112,7 @@ def get_summary():
     })
 
 @reports_bp.route('/by-category', methods=['GET'])
+@login_required
 def get_by_category():
     """Get expenses/income by category"""
     period = request.args.get('period', 'monthly')
@@ -182,6 +185,7 @@ def get_by_category():
     })
 
 @reports_bp.route('/budget-analysis', methods=['GET'])
+@login_required
 def get_budget_analysis():
     """Get budget vs actual analysis"""
     period = request.args.get('period', 'monthly')
@@ -240,6 +244,7 @@ def get_budget_analysis():
     })
 
 @reports_bp.route('/trending', methods=['GET'])
+@login_required
 def get_trending():
     """Get spending trends over time"""
     months = request.args.get('months', 6, type=int)

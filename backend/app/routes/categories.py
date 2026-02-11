@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.category import Category
-from app.routes.auth import write_required
+from app.routes.auth import write_required, login_required
 from datetime import datetime
 
 categories_bp = Blueprint('categories', __name__, url_prefix='/api/categories')
@@ -18,6 +18,7 @@ DEFAULT_INCOME_CATEGORIES = [
 ]
 
 @categories_bp.route('/', methods=['GET'])
+@login_required
 def get_categories():
     """Get all categories with optional filtering"""
     include_subs = request.args.get('include_subcategories', 'false').lower() == 'true'
@@ -53,6 +54,7 @@ def get_categories():
     return jsonify([cat.to_dict(include_subcategories=include_subs) for cat in categories])
 
 @categories_bp.route('/<int:id>/subcategories', methods=['GET'])
+@login_required
 def get_subcategories(id):
     """Get all subcategories of a category"""
     current_user_id = session['user_id']
@@ -69,6 +71,7 @@ def get_subcategories(id):
     return jsonify([sub.to_dict() for sub in accessible_subs])
 
 @categories_bp.route('/type/<type>', methods=['GET'])
+@login_required
 def get_categories_by_type(type):
     """Get categories by type (income or expense)"""
     if type not in ['income', 'expense']:

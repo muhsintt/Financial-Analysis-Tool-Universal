@@ -3,7 +3,7 @@ from app import db
 from app.models.categorization_rule import CategorizationRule
 from app.models.category import Category
 from app.models.transaction import Transaction
-from app.routes.auth import write_required
+from app.routes.auth import write_required, login_required
 
 rules_bp = Blueprint('rules', __name__, url_prefix='/api/rules')
 
@@ -59,6 +59,7 @@ def apply_rules():
     }), 200
 
 @rules_bp.route('/', methods=['GET'])
+@login_required
 def get_rules():
     """Get all categorization rules (user rules + system rules)"""
     current_user_id = session['user_id']
@@ -74,6 +75,7 @@ def get_rules():
     return jsonify([r.to_dict() for r in rules])
 
 @rules_bp.route('/<int:id>', methods=['GET'])
+@login_required
 def get_rule(id):
     """Get a specific rule (user rule or system rule)"""
     current_user_id = session['user_id']
@@ -286,6 +288,7 @@ def bulk_import_rules():
     }), 201
 
 @rules_bp.route('/export', methods=['GET'])
+@login_required
 def export_rules():
     """Export all rules as JSON with category names for portability"""
     rules = CategorizationRule.query.order_by(
