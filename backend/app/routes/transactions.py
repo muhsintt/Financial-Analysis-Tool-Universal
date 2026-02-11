@@ -80,8 +80,8 @@ def create_transaction():
     if data['type'] not in ['income', 'expense']:
         return jsonify({'error': 'Type must be income or expense'}), 400
     
-    # Verify category exists
-    category = Category.query.get(data['category_id'])
+    # Verify category exists and belongs to current user
+    category = Category.query.filter_by(id=data['category_id'], user_id=session['user_id']).first()
     if not category:
         return jsonify({'error': 'Category not found'}), 404
     
@@ -123,7 +123,7 @@ def update_transaction(id):
     if 'date' in data:
         transaction.date = datetime.strptime(data['date'], '%Y-%m-%d').date()
     if 'category_id' in data:
-        category = Category.query.get(data['category_id'])
+        category = Category.query.filter_by(id=data['category_id'], user_id=session['user_id']).first()
         if not category:
             return jsonify({'error': 'Category not found'}), 404
         transaction.category_id = data['category_id']
@@ -166,7 +166,7 @@ def delete_transaction(id):
 @write_required
 def toggle_exclude(id):
     """Toggle exclude status of a transaction"""
-    transaction = Transaction.query.get_or_404(id)
+    transaction = Transaction.query.filter_by(id=id, user_id=session['user_id']).first_or_404()
     transaction.is_excluded = not transaction.is_excluded
     db.session.commit()
     return jsonify(transaction.to_dict())
@@ -182,11 +182,14 @@ def change_category(category_id):
     if not new_category_id or not transaction_ids:
         return jsonify({'error': 'Missing new_category_id or transaction_ids'}), 400
     
-    category = Category.query.get(new_category_id)
+    category = Category.query.filter_by(id=new_category_id, user_id=session['user_id']).first()
     if not category:
         return jsonify({'error': 'Category not found'}), 404
     
-    count = Transaction.query.filter(Transaction.id.in_(transaction_ids)).update(
+    count = Transaction.query.filter(
+        Transaction.id.in_(transaction_ids),
+        Transaction.user_id == session['user_id']  # Ensure user isolation
+    ).update(
         {'category_id': new_category_id},
         synchronize_session=False
     )
@@ -204,8 +207,11 @@ def bulk_update():
     if not transaction_ids:
         return jsonify({'error': 'Missing transaction_ids'}), 400
     
-    # Filter valid transaction IDs
-    transactions = Transaction.query.filter(Transaction.id.in_(transaction_ids)).all()
+    # Filter valid transaction IDs for current user
+    transactions = Transaction.query.filter(
+        Transaction.id.in_(transaction_ids),
+        Transaction.user_id == session['user_id']
+    ).all()
     
     if not transactions:
         return jsonify({'error': 'No transactions found'}), 404
@@ -213,7 +219,7 @@ def bulk_update():
     # Update category if provided
     if 'category_id' in data:
         category_id = data.get('category_id')
-        category = Category.query.get(category_id)
+        category = Category.query.filter_by(id=category_id, user_id=session['user_id']).first()
         if not category:
             return jsonify({'error': 'Category not found'}), 404
         
@@ -246,7 +252,10 @@ def bulk_delete():
     if not transaction_ids:
         return jsonify({'error': 'Missing transaction_ids'}), 400
     
-    transactions = Transaction.query.filter(Transaction.id.in_(transaction_ids)).all()
+    transactions = Transaction.query.filter(
+        Transaction.id.in_(transaction_ids),
+        Transaction.user_id == session['user_id']
+    ).all()
     
     if not transactions:
         return jsonify({'error': 'No transactions found'}), 404
@@ -282,8 +291,11 @@ def bulk_delete_preview():
         if not transaction_ids:
             return jsonify({'error': 'No valid transaction IDs found in file'}), 400
         
-        # Get the transactions that would be deleted
-        transactions = Transaction.query.filter(Transaction.id.in_(transaction_ids)).all()
+        # Get the transactions that would be deleted for current user
+        transactions = Transaction.query.filter(
+            Transaction.id.in_(transaction_ids),
+            Transaction.user_id == session['user_id']
+        ).all()
         
         return jsonify({
             'count': len(transactions),

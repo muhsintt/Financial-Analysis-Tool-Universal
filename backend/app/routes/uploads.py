@@ -177,7 +177,7 @@ def upload_file():
             file_size=file_size,
             file_type=file_ext,
             transaction_count=0,
-            uploaded_by=uploaded_by,
+            user_id=session['user_id'],  # Add user isolation
             status='processing'
         )
         db.session.add(upload_record)
@@ -191,13 +191,14 @@ def upload_file():
             
             # If no category_id, try to find or create default
             if not category_id:
-                category = Category.query.filter_by(name='Uncategorized').first()
+                category = Category.query.filter_by(name='Uncategorized', user_id=session['user_id']).first()
                 if not category:
                     category = Category(
                         name='Uncategorized',
                         type='expense',
                         color='#95a5a6',
-                        icon='question'
+                        icon='question',
+                        user_id=session['user_id']  # Add user isolation
                     )
                     db.session.add(category)
                     db.session.flush()
@@ -211,6 +212,7 @@ def upload_file():
                 category_id=category_id,
                 source='upload',
                 upload_id=upload_record.id,  # Link to upload record
+                user_id=session['user_id'],  # Add user isolation
                 notes=trans_data.get('notes', '')
             )
             
@@ -273,7 +275,7 @@ def preview_file():
         for row in preview_data:
             category_id = row.get('category_id')
             if category_id:
-                category = Category.query.get(category_id)
+                category = Category.query.filter_by(id=category_id, user_id=session['user_id']).first()
                 row['category'] = category.name if category else 'Uncategorized'
             else:
                 row['category'] = 'Uncategorized'
