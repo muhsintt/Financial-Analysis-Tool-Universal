@@ -48,6 +48,7 @@ class CategorizationRule(db.Model):
             'parent_id': parent_id,
             'priority': self.priority,
             'is_active': self.is_active,
+            'is_system': self.user_id is None,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }

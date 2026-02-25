@@ -137,7 +137,13 @@ def update_rule(id):
     rule = CategorizationRule.query.filter_by(
         id=id, 
         user_id=current_user_id  # Only allow updates to user rules
-    ).first_or_404()
+    ).first()
+    if not rule:
+        # Check if it's a system rule the user can't edit
+        system_rule = CategorizationRule.query.filter_by(id=id, user_id=None).first()
+        if system_rule:
+            return jsonify({'error': 'System rules cannot be edited. Duplicate the rule first to create your own copy.'}), 403
+        return jsonify({'error': 'Rule not found'}), 404
     data = request.get_json()
     
     # Check for duplicate names if name is being changed
@@ -183,7 +189,12 @@ def delete_rule(id):
     rule = CategorizationRule.query.filter_by(
         id=id, 
         user_id=current_user_id  # Only allow deletion of user rules
-    ).first_or_404()
+    ).first()
+    if not rule:
+        system_rule = CategorizationRule.query.filter_by(id=id, user_id=None).first()
+        if system_rule:
+            return jsonify({'error': 'System rules cannot be deleted.'}), 403
+        return jsonify({'error': 'Rule not found'}), 404
     
     db.session.delete(rule)
     db.session.commit()

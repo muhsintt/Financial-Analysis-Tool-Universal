@@ -3714,12 +3714,13 @@ function displayRules(rules) {
             </td>
             <td>
                 <div class="actions">
+                    ${r.is_system ? `<span class="rule-badge system" title="Built-in system rule">System</span>` : `
                     <button class="btn-icon edit" title="Edit" onclick="editRule(${r.id})">
                         <i class="fas fa-edit"></i>
                     </button>
                     <button class="btn-icon delete" title="Delete" onclick="deleteRule(${r.id})">
                         <i class="fas fa-trash"></i>
-                    </button>
+                    </button>`}
                 </div>
             </td>
         </tr>
@@ -3808,8 +3809,14 @@ async function handleRuleSubmit(e) {
         });
         
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to save rule');
+            let errorMessage = 'Failed to save rule';
+            try {
+                const error = await response.json();
+                errorMessage = error.error || errorMessage;
+            } catch (_) {
+                errorMessage = `Server error (${response.status})`;
+            }
+            throw new Error(errorMessage);
         }
         
         closeModal('ruleModal');

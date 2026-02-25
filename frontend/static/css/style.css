@@ -696,6 +696,17 @@ table tr:hover {
     color: #721c24;
 }
 
+.rule-badge.system {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #e2e3e5;
+    color: #6c757d;
+    letter-spacing: 0.3px;
+}
+
 .btn-icon.edit {
     color: var(--primary);
 }
