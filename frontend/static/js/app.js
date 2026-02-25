@@ -3748,7 +3748,11 @@ function displayRules(rules) {
 async function editRule(id) {
     try {
         const response = await apiFetch(`${API_URL}/rules/${id}`);
-        if (!response.ok) throw new Error('Failed to load rule');
+        if (!response.ok) {
+            let msg = 'Failed to load rule';
+            try { const e = await response.json(); msg = e.error || msg; } catch (_) {}
+            throw new Error(msg);
+        }
         
         const rule = await response.json();
         
@@ -3770,7 +3774,7 @@ async function editRule(id) {
         openModal('ruleModal');
     } catch (error) {
         console.error('Error loading rule:', error);
-        alert('Failed to load rule');
+        alert(error.message || 'Failed to load rule');
     }
 }
 
@@ -3783,12 +3787,16 @@ async function deleteRule(id) {
             method: 'DELETE'
         });
         
-        if (!response.ok) throw new Error('Failed to delete rule');
+        if (!response.ok) {
+            let msg = 'Failed to delete rule';
+            try { const e = await response.json(); msg = e.error || msg; } catch (_) {}
+            throw new Error(msg);
+        }
         
         loadRules();
     } catch (error) {
         console.error('Error deleting rule:', error);
-        alert('Failed to delete rule');
+        alert(error.message || 'Failed to delete rule');
     }
 }
 

@@ -91,7 +91,9 @@ def get_rule(id):
             CategorizationRule.user_id == current_user_id,
             CategorizationRule.user_id.is_(None)  # System rules
         )
-    ).first_or_404()
+    ).first()
+    if not rule:
+        return jsonify({'error': 'Rule not found'}), 404
     return jsonify(rule.to_dict())
 
 @rules_bp.route('/', methods=['POST'])
@@ -102,7 +104,9 @@ def create_rule():
     scope='self' -> user_id=current_user  (personal rule for this admin)
     """
     data = request.get_json()
-    
+    if not data:
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
+
     required_fields = ['name', 'keywords', 'category_id']
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
@@ -164,6 +168,8 @@ def update_rule(id):
         return jsonify({'error': 'Rule not found'}), 404
 
     data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
 
     # Determine new scope / target user_id
     new_scope = data.get('scope')  # 'all' or 'self', or None (no change)
@@ -175,11 +181,18 @@ def update_rule(id):
     new_name = data.get('name', rule.name)
 
     # Check for name conflicts in the target scope (excluding this rule)
-    conflict = CategorizationRule.query.filter(
-        CategorizationRule.name == new_name,
-        CategorizationRule.user_id == new_user_id,
-        CategorizationRule.id != id
-    ).first()
+    if new_user_id is None:
+        conflict = CategorizationRule.query.filter(
+            CategorizationRule.name == new_name,
+            CategorizationRule.user_id.is_(None),
+            CategorizationRule.id != id
+        ).first()
+    else:
+        conflict = CategorizationRule.query.filter(
+            CategorizationRule.name == new_name,
+            CategorizationRule.user_id == new_user_id,
+            CategorizationRule.id != id
+        ).first()
     if conflict:
         scope_label = 'all users' if new_user_id is None else 'your personal rules'
         return jsonify({'error': f'A rule with this name already exists for {scope_label}'}), 400
