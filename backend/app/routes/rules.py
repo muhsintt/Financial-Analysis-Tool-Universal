@@ -132,18 +132,24 @@ def create_rule():
 @rules_bp.route('/<int:id>', methods=['PUT'])
 @write_required
 def update_rule(id):
-    """Update a categorization rule (only user rules can be updated)"""
+    """Update a categorization rule. User rules are updated directly.
+    System rules (user_id=None) are converted to user-owned rules on save."""
     current_user_id = session['user_id']
+
+    # Try user-owned rule first
     rule = CategorizationRule.query.filter_by(
-        id=id, 
-        user_id=current_user_id  # Only allow updates to user rules
+        id=id,
+        user_id=current_user_id
     ).first()
+
+    # Fall back to system rule — editing a system rule converts it to a user rule
     if not rule:
-        # Check if it's a system rule the user can't edit
-        system_rule = CategorizationRule.query.filter_by(id=id, user_id=None).first()
-        if system_rule:
-            return jsonify({'error': 'System rules cannot be edited. Duplicate the rule first to create your own copy.'}), 403
-        return jsonify({'error': 'Rule not found'}), 404
+        rule = CategorizationRule.query.filter_by(id=id, user_id=None).first()
+        if rule:
+            rule.user_id = current_user_id  # claim ownership
+        else:
+            return jsonify({'error': 'Rule not found'}), 404
+
     data = request.get_json()
     
     # Check for duplicate names if name is being changed
@@ -184,18 +190,19 @@ def update_rule(id):
 @rules_bp.route('/<int:id>', methods=['DELETE'])
 @write_required
 def delete_rule(id):
-    """Delete a categorization rule (only user rules can be deleted)"""
+    """Delete a categorization rule (user rules and system rules)"""
     current_user_id = session['user_id']
+
+    # Try user-owned rule first, then system rule
     rule = CategorizationRule.query.filter_by(
-        id=id, 
-        user_id=current_user_id  # Only allow deletion of user rules
+        id=id,
+        user_id=current_user_id
     ).first()
     if not rule:
-        system_rule = CategorizationRule.query.filter_by(id=id, user_id=None).first()
-        if system_rule:
-            return jsonify({'error': 'System rules cannot be deleted.'}), 403
+        rule = CategorizationRule.query.filter_by(id=id, user_id=None).first()
+    if not rule:
         return jsonify({'error': 'Rule not found'}), 404
-    
+
     db.session.delete(rule)
     db.session.commit()
     
