@@ -3,26 +3,32 @@ from app import db
 from app.models.categorization_rule import CategorizationRule
 from app.models.category import Category
 from app.models.transaction import Transaction
-from app.routes.auth import write_required, login_required
+from app.routes.auth import write_required, login_required, superuser_required
 
 rules_bp = Blueprint('rules', __name__, url_prefix='/api/rules')
 
 @rules_bp.route('/apply', methods=['POST'])
-@write_required
+@login_required
 def apply_rules():
-    """Apply all active rules to existing transactions"""
+    """Apply all active rules to existing transactions.
+    Personal rules (scope=self) always take precedence over system rules (scope=all).
+    Users with no personal rules inherit system rules entirely."""
     current_user_id = session['user_id']
-    
-    # Get all active rules for current user + system rules ordered by priority
-    rules = CategorizationRule.query.filter(
-        db.or_(
-            CategorizationRule.user_id == current_user_id,
-            CategorizationRule.user_id.is_(None)  # System rules
-        ),
+
+    # Personal rules for this user (take precedence over system rules)
+    personal_rules = CategorizationRule.query.filter_by(
+        user_id=current_user_id,
+        is_active=True
+    ).order_by(CategorizationRule.priority.desc()).all()
+
+    # System / default rules (user_id=None)
+    system_rules = CategorizationRule.query.filter(
+        CategorizationRule.user_id.is_(None),
         CategorizationRule.is_active == True
-    ).order_by(
-        CategorizationRule.priority.desc()
-    ).all()
+    ).order_by(CategorizationRule.priority.desc()).all()
+
+    # Personal rules come first so they always win over system rules
+    rules = personal_rules + system_rules
     
     if not rules:
         return jsonify({'message': 'No active rules found', 'updated': 0}), 200
@@ -89,31 +95,40 @@ def get_rule(id):
     return jsonify(rule.to_dict())
 
 @rules_bp.route('/', methods=['POST'])
-@write_required
+@superuser_required
 def create_rule():
-    """Create a new categorization rule"""
+    """Create a new categorization rule (superusers only).
+    scope='all'  -> user_id=None  (applies to all users as default)
+    scope='self' -> user_id=current_user  (personal rule for this admin)
+    """
     data = request.get_json()
     
     required_fields = ['name', 'keywords', 'category_id']
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
     
-    # Verify category exists and user has access
     current_user_id = session['user_id']
+
+    # Determine target user_id based on scope
+    scope = data.get('scope', 'all')  # default to system-wide
+    target_user_id = None if scope == 'all' else current_user_id
+
+    # Verify category exists
     category = Category.query.filter(
         Category.id == data['category_id'],
-        (Category.user_id == current_user_id) | (Category.user_id.is_(None))
+        db.or_(Category.user_id == current_user_id, Category.user_id.is_(None))
     ).first()
     if not category:
         return jsonify({'error': 'Category not found or access denied'}), 404
     
-    # Check for duplicate names within user's scope
+    # Check for duplicate names within the target scope
     existing = CategorizationRule.query.filter_by(
-        name=data['name'], 
-        user_id=current_user_id
+        name=data['name'],
+        user_id=target_user_id
     ).first()
     if existing:
-        return jsonify({'error': 'Rule name already exists'}), 400
+        scope_label = 'all users' if target_user_id is None else 'your personal rules'
+        return jsonify({'error': f'A rule with this name already exists for {scope_label}'}), 400
     
     rule = CategorizationRule(
         name=data['name'],
@@ -121,7 +136,7 @@ def create_rule():
         category_id=data['category_id'],
         priority=data.get('priority', 0),
         is_active=data.get('is_active', True),
-        user_id=current_user_id  # Associate with current user
+        user_id=target_user_id
     )
     
     db.session.add(rule)
@@ -130,82 +145,90 @@ def create_rule():
     return jsonify(rule.to_dict()), 201
 
 @rules_bp.route('/<int:id>', methods=['PUT'])
-@write_required
+@superuser_required
 def update_rule(id):
-    """Update a categorization rule. User rules are updated directly.
-    System rules (user_id=None) are converted to user-owned rules on save."""
+    """Update a categorization rule (superusers only).
+    The scope field controls whether the rule is system-wide (all) or personal (self).
+    """
     current_user_id = session['user_id']
 
-    # Try user-owned rule first
-    rule = CategorizationRule.query.filter_by(
-        id=id,
-        user_id=current_user_id
+    # Find the rule: could be user-owned or a system rule
+    rule = CategorizationRule.query.filter(
+        CategorizationRule.id == id,
+        db.or_(
+            CategorizationRule.user_id == current_user_id,
+            CategorizationRule.user_id.is_(None)
+        )
     ).first()
-
-    # Fall back to system rule — editing a system rule converts it to a user rule
     if not rule:
-        rule = CategorizationRule.query.filter_by(id=id, user_id=None).first()
-        if rule:
-            rule.user_id = current_user_id  # claim ownership
-        else:
-            return jsonify({'error': 'Rule not found'}), 404
+        return jsonify({'error': 'Rule not found'}), 404
 
     data = request.get_json()
-    
-    # Check for duplicate names if name is being changed
-    if 'name' in data and data['name'] != rule.name:
-        existing = CategorizationRule.query.filter_by(
-            name=data['name'], 
-            user_id=current_user_id
-        ).first()
-        if existing:
-            return jsonify({'error': 'Rule name already exists'}), 400
-    
+
+    # Determine new scope / target user_id
+    new_scope = data.get('scope')  # 'all' or 'self', or None (no change)
+    if new_scope is not None:
+        new_user_id = None if new_scope == 'all' else current_user_id
+    else:
+        new_user_id = rule.user_id  # keep existing scope
+
+    new_name = data.get('name', rule.name)
+
+    # Check for name conflicts in the target scope (excluding this rule)
+    conflict = CategorizationRule.query.filter(
+        CategorizationRule.name == new_name,
+        CategorizationRule.user_id == new_user_id,
+        CategorizationRule.id != id
+    ).first()
+    if conflict:
+        scope_label = 'all users' if new_user_id is None else 'your personal rules'
+        return jsonify({'error': f'A rule with this name already exists for {scope_label}'}), 400
+
     # Verify category exists and user has access if being changed
     if 'category_id' in data:
         category = Category.query.filter(
             Category.id == data['category_id'],
             db.or_(
                 Category.user_id == current_user_id,
-                Category.user_id.is_(None)  # System categories
+                Category.user_id.is_(None)
             )
         ).first()
         if not category:
             return jsonify({'error': 'Category not found or access denied'}), 404
         rule.category_id = data['category_id']
-    
-    if 'name' in data:
-        rule.name = data['name']
+
+    rule.name = new_name
+    rule.user_id = new_user_id  # apply scope change
     if 'keywords' in data:
         rule.keywords = data['keywords']
     if 'priority' in data:
         rule.priority = data['priority']
     if 'is_active' in data:
         rule.is_active = data['is_active']
-    
+
     db.session.commit()
-    
+
     return jsonify(rule.to_dict())
 
 @rules_bp.route('/<int:id>', methods=['DELETE'])
-@write_required
+@superuser_required
 def delete_rule(id):
-    """Delete a categorization rule (user rules and system rules)"""
+    """Delete a categorization rule (superusers only)"""
     current_user_id = session['user_id']
 
-    # Try user-owned rule first, then system rule
-    rule = CategorizationRule.query.filter_by(
-        id=id,
-        user_id=current_user_id
+    rule = CategorizationRule.query.filter(
+        CategorizationRule.id == id,
+        db.or_(
+            CategorizationRule.user_id == current_user_id,
+            CategorizationRule.user_id.is_(None)
+        )
     ).first()
-    if not rule:
-        rule = CategorizationRule.query.filter_by(id=id, user_id=None).first()
     if not rule:
         return jsonify({'error': 'Rule not found'}), 404
 
     db.session.delete(rule)
     db.session.commit()
-    
+
     return jsonify({'message': 'Rule deleted successfully'}), 200
 
 @rules_bp.route('/test', methods=['POST'])

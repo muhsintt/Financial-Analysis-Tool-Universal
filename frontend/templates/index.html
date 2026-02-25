@@ -673,13 +673,13 @@
                 <!-- Categorization Rules Page -->
                 <div id="rules" class="page">
                     <div class="page-header">
-                        <button class="btn btn-primary" id="addRuleBtn">
+                        <button class="btn btn-primary admin-only" id="addRuleBtn">
                             <i class="fas fa-plus"></i> New Rule
                         </button>
                         <button class="btn btn-success" id="applyRulesBtn">
                             <i class="fas fa-sync"></i> Apply Rules
                         </button>
-                        <div class="btn-group">
+                        <div class="btn-group admin-only">
                             <button class="btn btn-secondary" id="exportRulesBtn">
                                 <i class="fas fa-download"></i> Export
                             </button>
@@ -702,7 +702,8 @@
                                     <th>Category</th>
                                     <th>Priority</th>
                                     <th>Status</th>
-                                    <th>Actions</th>
+                                    <th class="admin-only" id="ruleScopeHeader">Scope</th>
+                                    <th class="admin-only" id="ruleActionsHeader">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="rulesBody">
@@ -1424,6 +1425,19 @@
                         <input type="checkbox" id="ruleActive" checked>
                         Active
                     </label>
+                </div>
+                <div class="form-group" id="ruleScopeGroup">
+                    <label>Save For</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="ruleScope" value="all" id="ruleScopeAll" checked>
+                            <span>All Users &mdash; <small>default rule applied to every user</small></span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="ruleScope" value="self" id="ruleScopeSelf">
+                            <span>Myself Only &mdash; <small>personal rule, overrides the default for your account</small></span>
+                        </label>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Test Rule</label>

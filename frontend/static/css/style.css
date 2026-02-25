@@ -696,15 +696,68 @@ table tr:hover {
     color: #721c24;
 }
 
-.rule-badge.system {
-    display: inline-block;
+/* Scope badges in rules table */
+.rule-scope-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     padding: 3px 8px;
     border-radius: 4px;
     font-size: 11px;
     font-weight: 600;
-    background: #e2e3e5;
+    white-space: nowrap;
+}
+
+.rule-scope-badge.scope-all {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.rule-scope-badge.scope-self {
+    background: #fff3cd;
+    color: #856404;
+}
+
+/* Scope radio group in rule modal */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--border, #dee2e6);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.radio-option:hover {
+    border-color: var(--primary, #007bff);
+    background: rgba(0, 123, 255, 0.04);
+}
+
+.radio-option input[type="radio"] {
+    margin-top: 2px;
+    flex-shrink: 0;
+    accent-color: var(--primary, #007bff);
+}
+
+.radio-option span {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.radio-option span small {
+    display: block;
     color: #6c757d;
-    letter-spacing: 0.3px;
+    font-size: 12px;
+    margin-top: 1px;
 }
 
 .btn-icon.edit {

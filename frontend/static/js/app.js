@@ -3686,6 +3686,16 @@ if (cancelBtn) {
 // Load Rules
 async function loadRules() {
     if (state.currentPage !== 'rules') return;
+
+    const isSuperuser = state.currentUser && state.currentUser.role === 'superuser';
+
+    // Show/hide admin-only controls in the rules page header and table
+    document.querySelectorAll('#rules .admin-only').forEach(el => {
+        el.style.display = isSuperuser ? '' : 'none';
+    });
+    // Show/hide the scope selector inside the rule modal
+    const scopeGroup = document.getElementById('ruleScopeGroup');
+    if (scopeGroup) scopeGroup.style.display = isSuperuser ? '' : 'none';
     
     try {
         const response = await apiFetch(`${API_URL}/rules/`);
@@ -3700,6 +3710,7 @@ async function loadRules() {
 
 // Display Rules
 function displayRules(rules) {
+    const isSuperuser = state.currentUser && state.currentUser.role === 'superuser';
     const tbody = document.getElementById('rulesBody');
     tbody.innerHTML = rules.map(r => `
         <tr>
@@ -3712,7 +3723,14 @@ function displayRules(rules) {
                     ${r.is_active ? 'Active' : 'Inactive'}
                 </span>
             </td>
-            <td>
+            <td style="${isSuperuser ? '' : 'display:none'}">
+                <span class="rule-scope-badge ${r.scope === 'all' ? 'scope-all' : 'scope-self'}">
+                    ${r.scope === 'all'
+                        ? '<i class="fas fa-globe"></i> All Users'
+                        : '<i class="fas fa-user"></i> Personal'}
+                </span>
+            </td>
+            <td style="${isSuperuser ? '' : 'display:none'}">
                 <div class="actions">
                     <button class="btn-icon edit" title="Edit" onclick="editRule(${r.id})">
                         <i class="fas fa-edit"></i>
@@ -3740,6 +3758,10 @@ async function editRule(id) {
         document.getElementById('ruleCategory').value = rule.category_id;
         document.getElementById('rulePriority').value = rule.priority;
         document.getElementById('ruleActive').checked = rule.is_active;
+
+        // Populate scope radio
+        const scopeRadio = document.querySelector(`input[name="ruleScope"][value="${rule.scope || 'all'}"]`);
+        if (scopeRadio) scopeRadio.checked = true;
         
         // Update form to edit mode
         document.getElementById('ruleModalTitle').textContent = 'Edit Categorization Rule';
@@ -3780,6 +3802,8 @@ async function handleRuleSubmit(e) {
     const priority = parseInt(document.getElementById('rulePriority').value);
     const is_active = document.getElementById('ruleActive').checked;
     const ruleId = document.getElementById('ruleForm').dataset.ruleId;
+    const scopeEl = document.querySelector('input[name="ruleScope"]:checked');
+    const scope = scopeEl ? scopeEl.value : 'all';
     
     if (!name || !keywords || !category_id) {
         alert('Please fill all required fields');
@@ -3793,7 +3817,7 @@ async function handleRuleSubmit(e) {
         
         const method = ruleId ? 'PUT' : 'POST';
         
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
             method: method,
             headers: {
                 'Content-Type': 'application/json'
@@ -3803,7 +3827,8 @@ async function handleRuleSubmit(e) {
                 keywords,
                 category_id,
                 priority,
-                is_active
+                is_active,
+                scope
             })
         });
         
