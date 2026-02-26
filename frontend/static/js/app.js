@@ -641,15 +641,34 @@ async function handleLogout() {
 }
 
 async function initializeApp() {
-    // Initialize month picker with current month
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
+
+    // Monthly picker — current month
     document.getElementById('monthPicker').value = `${year}-${month}`;
-    
+
+    // Daily picker — today
+    document.getElementById('dayPicker').value = today.toISOString().split('T')[0];
+
+    // Weekly picker — current ISO week
+    const isoWeek = getISOWeek(today);
+    document.getElementById('weekPicker').value = `${year}-W${String(isoWeek).padStart(2, '0')}`;
+
+    // Annual picker — current year
+    document.getElementById('yearPicker').value = year;
+
+    // Custom range — first day of current month to today
+    const firstOfMonth = `${year}-${month}-01`;
+    document.getElementById('customStartDate').value = firstOfMonth;
+    document.getElementById('customEndDate').value = today.toISOString().split('T')[0];
+
     // Initialize Badí' calendar selectors
     initializeBadiCalendar();
-    
+
+    // Show the right pickers for the default period (monthly)
+    updateDatePickerVisibility();
+
     console.log('Initializing event listeners...');
     initializeEventListeners();
     console.log('Initializing categories...');
@@ -657,6 +676,14 @@ async function initializeApp() {
     console.log('Loading dashboard...');
     await loadDashboard();
     console.log('Page initialized');
+}
+
+// Return ISO week number for a Date
+function getISOWeek(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
 // Initialize Badí' Calendar UI
@@ -693,40 +720,214 @@ function initializeBadiCalendar() {
 // Toggle between Gregorian and Badí' calendar UI
 function toggleCalendarType(type) {
     state.calendarType = type;
-    
-    const monthPicker = document.getElementById('monthPicker');
-    const badiMonthPicker = document.getElementById('badiMonthPicker');
-    const badiYearPicker = document.getElementById('badiYearPicker');
-    
-    if (type === 'badi') {
-        monthPicker.style.display = 'none';
-        badiMonthPicker.style.display = 'block';
-        badiYearPicker.style.display = 'block';
-    } else {
-        monthPicker.style.display = 'block';
-        badiMonthPicker.style.display = 'none';
-        badiYearPicker.style.display = 'none';
-    }
-    
+    updateDatePickerVisibility();
     // Don't auto-load - wait for Apply button
 }
 
-// Apply calendar settings and reload data
+// Show/hide the right date pickers based on current period and calendar type
+function updateDatePickerVisibility() {
+    const period = document.getElementById('periodSelect').value;
+    const calType = document.getElementById('calendarTypeSelect').value;
+    const isBadi = calType === 'badi';
+
+    // All pickers to manage
+    const pickers = {
+        dayPicker: false,
+        weekPicker: false,
+        monthPicker: false,
+        yearPicker: false,
+        customStartDate: false,
+        customRangeSep: false,
+        customEndDate: false,
+        badiMonthPicker: false,
+        badiYearPicker: false
+    };
+
+    if (period === 'custom') {
+        pickers.customStartDate = true;
+        pickers.customRangeSep = true;
+        pickers.customEndDate = true;
+    } else if (period === 'daily') {
+        pickers.dayPicker = true;   // Gregorian day picker works for both
+    } else if (period === 'weekly') {
+        pickers.weekPicker = true;  // ISO week picker works for both
+    } else if (period === 'monthly') {
+        if (isBadi) {
+            pickers.badiMonthPicker = true;
+            pickers.badiYearPicker = true;
+        } else {
+            pickers.monthPicker = true;
+        }
+    } else if (period === 'annual') {
+        if (isBadi) {
+            pickers.badiYearPicker = true;
+        } else {
+            pickers.yearPicker = true;
+        }
+    }
+
+    Object.entries(pickers).forEach(([id, visible]) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = visible ? (id === 'customRangeSep' ? 'flex' : 'block') : 'none';
+    });
+}
+
+// Convert ISO week string 'YYYY-Www' to the Monday date string 'YYYY-MM-DD'
+function weekValueToMonday(weekValue) {
+    const [yearStr, weekStr] = weekValue.split('-W');
+    const year = parseInt(yearStr);
+    const week = parseInt(weekStr);
+    // ISO week 1 = week containing Jan 4
+    const jan4 = new Date(year, 0, 4);
+    const jan4Day = jan4.getDay() || 7;  // convert Sun=0 to 7
+    const monday = new Date(jan4.getTime() - (jan4Day - 1) * 86400000 + (week - 1) * 7 * 86400000);
+    return monday.toISOString().split('T')[0];
+}
+
+// Build URLSearchParams for report/summary/budget API calls
+function getDateParams() {
+    const params = new URLSearchParams();
+    const period = state.period;
+    const calType = state.calendarType;
+
+    params.append('period', period);
+    params.append('calendar', calType);
+
+    if (period === 'custom') {
+        const start = document.getElementById('customStartDate').value;
+        const end   = document.getElementById('customEndDate').value;
+        if (start) params.append('date_from', start);
+        if (end)   params.append('date_to', end);
+    } else if (period === 'daily') {
+        const val = document.getElementById('dayPicker').value;
+        if (val) params.append('specific_date', val);
+    } else if (period === 'weekly') {
+        const weekVal = document.getElementById('weekPicker').value;
+        if (weekVal) params.append('week_start', weekValueToMonday(weekVal));
+    } else if (period === 'monthly') {
+        if (calType === 'badi') {
+            params.append('year', state.badiYear);
+            params.append('month', state.badiMonth);
+        } else {
+            const val = document.getElementById('monthPicker').value;
+            if (val) { const [y, m] = val.split('-'); params.append('year', y); params.append('month', m); }
+        }
+    } else if (period === 'annual') {
+        if (calType === 'badi') {
+            params.append('year', state.badiYear);
+        } else {
+            const val = document.getElementById('yearPicker').value;
+            if (val) params.append('year', val);
+        }
+    }
+    return params;
+}
+
+// Compute {start, end} date strings for the transactions endpoint
+function getDateRange() {
+    const period = state.period;
+    const calType = state.calendarType;
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    if (period === 'custom') {
+        return {
+            start: document.getElementById('customStartDate').value || todayStr,
+            end:   document.getElementById('customEndDate').value   || todayStr
+        };
+    }
+    if (period === 'daily') {
+        const v = document.getElementById('dayPicker').value || todayStr;
+        return { start: v, end: v };
+    }
+    if (period === 'weekly') {
+        const weekVal = document.getElementById('weekPicker').value;
+        let mondayStr;
+        if (weekVal) {
+            mondayStr = weekValueToMonday(weekVal);
+        } else {
+            const d = new Date(today);
+            const day = d.getDay() || 7;
+            d.setDate(d.getDate() - (day - 1));
+            mondayStr = d.toISOString().split('T')[0];
+        }
+        const sun = new Date(mondayStr);
+        sun.setDate(sun.getDate() + 6);
+        return { start: mondayStr, end: sun.toISOString().split('T')[0] };
+    }
+    if (period === 'monthly') {
+        if (calType === 'badi') {
+            const range = getBadiMonthDateRange(state.badiYear, state.badiMonth);
+            return {
+                start: range.start.toISOString().split('T')[0],
+                end:   range.end.toISOString().split('T')[0]
+            };
+        }
+        const val = document.getElementById('monthPicker').value;
+        const y = val ? parseInt(val.split('-')[0]) : today.getFullYear();
+        const m = val ? parseInt(val.split('-')[1]) : today.getMonth() + 1;
+        const first = `${y}-${String(m).padStart(2, '0')}-01`;
+        const last  = `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+        return { start: first, end: last };
+    }
+    if (period === 'annual') {
+        if (calType === 'badi') {
+            const range = getBadiYearDateRange(state.badiYear);
+            const endStr = range.end.toISOString().split('T')[0];
+            return {
+                start: range.start.toISOString().split('T')[0],
+                end:   endStr > todayStr ? todayStr : endStr
+            };
+        }
+        const yr = parseInt(document.getElementById('yearPicker').value) || today.getFullYear();
+        const start = `${yr}-01-01`;
+        const end   = yr < today.getFullYear() ? `${yr}-12-31` : todayStr;
+        return { start, end };
+    }
+    return null;
+}
+
+// Human-readable label for the current period selection
+function getPeriodLabel() {
+    const period = state.period;
+    if (period === 'daily') {
+        return document.getElementById('dayPicker').value || 'Today';
+    } else if (period === 'weekly') {
+        const wv = document.getElementById('weekPicker').value;
+        return wv ? `Week of ${weekValueToMonday(wv)}` : 'This Week';
+    } else if (period === 'monthly') {
+        return document.getElementById('monthPicker').value || 'This Month';
+    } else if (period === 'annual') {
+        return document.getElementById('yearPicker').value || String(new Date().getFullYear());
+    } else if (period === 'custom') {
+        const s = document.getElementById('customStartDate').value;
+        const e = document.getElementById('customEndDate').value;
+        return s && e ? `${s} → ${e}` : 'Custom';
+    }
+    return period;
+}
+
+// Apply calendar settings and reload whatever page is active
 function applyCalendarSettings() {
-    // Update state from UI
     state.calendarType = document.getElementById('calendarTypeSelect').value;
     state.period = document.getElementById('periodSelect').value;
-    
+
     if (state.calendarType === 'badi') {
         state.badiMonth = parseInt(document.getElementById('badiMonthPicker').value);
-        state.badiYear = parseInt(document.getElementById('badiYearPicker').value);
+        state.badiYear  = parseInt(document.getElementById('badiYearPicker').value);
     }
-    
-    // Reload dashboard with new settings
-    loadDashboard();
-    
-    // Show feedback
-    showNotification('Calendar settings applied', 'success');
+
+    // Reload data for whichever page is currently active
+    switch (state.currentPage) {
+        case 'dashboard':     loadDashboard();     break;
+        case 'transactions':  loadTransactions();  break;
+        case 'budgets':       loadBudgets();       break;
+        case 'reports':       loadReports();       break;
+        case 'charts-summaries': loadChartsSummaries(); break;
+        default:              loadDashboard();     break;
+    }
+
+    showNotification('Date filter applied', 'success');
 }
 
 // Event Listeners
@@ -756,10 +957,26 @@ function initializeEventListeners() {
     // Period selector
     document.getElementById('periodSelect').addEventListener('change', (e) => {
         state.period = e.target.value;
+        updateDatePickerVisibility();
         // Don't auto-load - wait for Apply button
     });
 
-    document.getElementById('monthPicker').addEventListener('change', (e) => {
+    document.getElementById('monthPicker').addEventListener('change', () => {
+        // Don't auto-load - wait for Apply button
+    });
+    document.getElementById('dayPicker').addEventListener('change', () => {
+        // Don't auto-load - wait for Apply button
+    });
+    document.getElementById('weekPicker').addEventListener('change', () => {
+        // Don't auto-load - wait for Apply button
+    });
+    document.getElementById('yearPicker').addEventListener('change', () => {
+        // Don't auto-load - wait for Apply button
+    });
+    document.getElementById('customStartDate').addEventListener('change', () => {
+        // Don't auto-load - wait for Apply button
+    });
+    document.getElementById('customEndDate').addEventListener('change', () => {
         // Don't auto-load - wait for Apply button
     });
 
@@ -1556,46 +1773,16 @@ async function loadDashboard() {
     if (state.currentPage !== 'dashboard') return;
 
     try {
-        const period = state.period;
-        const params = new URLSearchParams({ period, include_excluded: false });
-        
-        // Add calendar type
-        params.append('calendar', state.calendarType);
-        
-        // Add year and month based on calendar type
-        if (period === 'monthly') {
-            if (state.calendarType === 'badi') {
-                // Use Badí' year and month
-                params.append('year', state.badiYear);
-                params.append('month', state.badiMonth);
-            } else {
-                // Use Gregorian month picker
-                const monthPicker = document.getElementById('monthPicker');
-                if (monthPicker && monthPicker.value) {
-                    const [year, month] = monthPicker.value.split('-');
-                    params.append('year', year);
-                    params.append('month', month);
-                }
-            }
-        } else if (period === 'annual') {
-            if (state.calendarType === 'badi') {
-                params.append('year', state.badiYear);
-            } else {
-                const monthPicker = document.getElementById('monthPicker');
-                if (monthPicker && monthPicker.value) {
-                    const [year] = monthPicker.value.split('-');
-                    params.append('year', year);
-                }
-            }
-        }
-        
+        const params = getDateParams();
+        params.append('include_excluded', 'false');
+
         // Load summary
         const summaryResponse = await apiFetch(`${API_URL}/reports/summary?${params}`);
         const summary = await summaryResponse.json();
 
-        document.getElementById('totalIncome').textContent = formatCurrency(summary.total_income);
-        document.getElementById('totalExpense').textContent = formatCurrency(summary.total_expense);
-        document.getElementById('netBalance').textContent = formatCurrency(summary.net);
+        document.getElementById('totalIncome').textContent   = formatCurrency(summary.total_income);
+        document.getElementById('totalExpense').textContent  = formatCurrency(summary.total_expense);
+        document.getElementById('netBalance').textContent    = formatCurrency(summary.net);
         document.getElementById('totalExcluded').textContent = formatCurrency(summary.total_excluded);
 
         // Load category breakdowns
@@ -1605,26 +1792,29 @@ async function loadDashboard() {
         ]);
 
         const expenseData = await expenseResponse.json();
-        const incomeData = await incomeResponse.json();
+        const incomeData  = await incomeResponse.json();
 
-        // Update charts
         updateCategoryCharts(expenseData, incomeData);
-
-        // Update category breakdown tables
         updateCategoryBreakdown(expenseData, incomeData);
 
-        // Load recent transactions
-        const transResponse = await apiFetch(`${API_URL}/transactions/?include_excluded=false`);
+        // Load recent transactions (respect date filter)
+        const dateRange = getDateRange();
+        const tParams = new URLSearchParams({ include_excluded: false });
+        if (dateRange) {
+            tParams.append('start_date', dateRange.start);
+            tParams.append('end_date',   dateRange.end);
+        }
+        const transResponse = await apiFetch(`${API_URL}/transactions/?${tParams}`);
         const transactions = await transResponse.json();
-        
+
         const recentList = document.getElementById('recentTransList');
         recentList.innerHTML = transactions.slice(0, 5).map(t => `
             <div class="transaction-item ${t.type}">
                 <div class="trans-info">
                     <div class="trans-desc">${t.description}</div>
-                    <div class="trans-cat">${t.category_name} • ${formatDateWithCalendar(t.date)}</div>
+                    <div class="trans-cat">${t.category_name} \u2022 ${formatDateWithCalendar(t.date)}</div>
                 </div>
-                <div class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</td>
+                <div class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</div>
             </div>
         `).join('');
     } catch (error) {
@@ -1736,10 +1926,9 @@ async function loadTransactions() {
     console.log('=== loadTransactions() START ===');
     
     try {
-        // Check if we have the required DOM elements
-        const typeFilterEl = document.getElementById('typeFilter');
+        const typeFilterEl     = document.getElementById('typeFilter');
         const categoryFilterEl = document.getElementById('categoryFilter');
-        const statusFilterEl = document.getElementById('statusFilter');
+        const statusFilterEl   = document.getElementById('statusFilter');
         const transactionsBodyEl = document.getElementById('transactionsBody');
         
         console.log('DOM elements check:');
@@ -1748,51 +1937,44 @@ async function loadTransactions() {
         console.log('- statusFilter:', statusFilterEl ? 'found' : 'NOT FOUND');
         console.log('- transactionsBody:', transactionsBodyEl ? 'found' : 'NOT FOUND');
         
-        const typeFilter = typeFilterEl ? typeFilterEl.value : '';
+        const typeFilter     = typeFilterEl     ? typeFilterEl.value     : '';
         const categoryFilter = categoryFilterEl ? categoryFilterEl.value : '';
-        const statusFilter = statusFilterEl ? statusFilterEl.value : '';
+        const statusFilter   = statusFilterEl   ? statusFilterEl.value   : '';
 
-        const params = new URLSearchParams({
-            include_excluded: true
-        });
+        const params = new URLSearchParams({ include_excluded: true });
 
-        if (typeFilter) params.append('type', typeFilter);
+        if (typeFilter)     params.append('type', typeFilter);
         if (categoryFilter) params.append('category_id', categoryFilter);
+
+        // Apply the global date filter
+        const dateRange = getDateRange();
+        if (dateRange) {
+            params.append('start_date', dateRange.start);
+            params.append('end_date',   dateRange.end);
+        }
 
         const fullUrl = `${API_URL}/transactions/?${params}`;
         console.log('Making API call to:', fullUrl);
         
         const response = await apiFetch(fullUrl);
         console.log('API Response status:', response.status);
-        console.log('API Response ok:', response.ok);
         
         if (!response.ok) throw new Error(`Failed to load transactions: ${response.status}`);
 
         let transactions = await response.json();
         console.log('Raw API response - transaction count:', transactions.length);
-        console.log('Raw API response - first transaction:', transactions[0]);
         
-        // Filter by status (included/excluded)
         if (statusFilter === 'included') {
             transactions = transactions.filter(t => !t.is_excluded);
-            console.log('After filtering for included:', transactions.length);
         } else if (statusFilter === 'excluded') {
             transactions = transactions.filter(t => t.is_excluded);
-            console.log('After filtering for excluded:', transactions.length);
         }
         
-        console.log('Final filtered transactions count:', transactions.length);
-        console.log('Setting state.transactions and calling sortTransactions...');
         state.transactions = transactions;
-        
-        // Apply current sort configuration
         sortTransactions(state.sortConfig.field);
-        
         console.log('=== loadTransactions() END ===');
     } catch (error) {
-        console.error('=== ERROR in loadTransactions() ===');
-        console.error('Error details:', error);
-        console.error('Error stack:', error.stack);
+        console.error('=== ERROR in loadTransactions() ===', error);
     }
 }
 
@@ -2357,10 +2539,21 @@ async function applyBulkCategoryUpdate(transactionIds, categoryId) {
 // Load Budgets
 async function loadBudgets() {
     try {
-        const response = await apiFetch(`${API_URL}/budgets/`);
-        if (!response.ok) throw new Error('Failed to load budgets');
+        const dateParams = getDateParams();
 
-        state.budgets = await response.json();
+        const [budgetResponse, spendingResponse] = await Promise.all([
+            apiFetch(`${API_URL}/budgets/`),
+            apiFetch(`${API_URL}/reports/by-category?${dateParams}&type=expense&include_excluded=false`)
+        ]);
+
+        if (!budgetResponse.ok) throw new Error('Failed to load budgets');
+        state.budgets = await budgetResponse.json();
+
+        const spendingData = spendingResponse.ok ? await spendingResponse.json() : { categories: [] };
+        const spendingByCatId = {};
+        spendingData.categories.forEach(c => {
+            if (c.category_id != null) spendingByCatId[c.category_id] = c;
+        });
 
         const grid = document.getElementById('budgetsGrid');
         if (state.budgets.length === 0) {
@@ -2368,21 +2561,35 @@ async function loadBudgets() {
             return;
         }
 
-        grid.innerHTML = state.budgets.map(b => `
+        const periodLabel = getPeriodLabel();
+
+        grid.innerHTML = state.budgets.map(b => {
+            const spending   = spendingByCatId[b.category_id];
+            const actual     = spending ? spending.amount : 0;
+            const pct        = b.amount > 0 ? Math.min((actual / b.amount) * 100, 100) : 0;
+            const isOver     = actual > b.amount;
+            const statusCls  = isOver ? 'expense' : 'income';
+            return `
             <div class="budget-card">
                 <h4>${b.category_name}</h4>
                 <div class="budget-info">
                     <div class="budget-row">
-                        <label>Period:</label>
-                        <span class="value">${b.period}</span>
-                    </div>
-                    <div class="budget-row">
                         <label>Budget:</label>
-                        <span class="value">${formatCurrency(b.amount)}</span>
+                        <span class="value">${formatCurrency(b.amount)} (${b.period})</span>
                     </div>
                     <div class="budget-row">
-                        <label>Status:</label>
-                        <span class="value">${b.for_excluded ? 'Excluded Only' : 'All Expenses'}</span>
+                        <label>Spent (${escapeHtml(periodLabel)}):</label>
+                        <span class="value tag ${statusCls}">${formatCurrency(actual)}</span>
+                    </div>
+                    <div style="margin: 8px 0;">
+                        <div class="budget-progress">
+                            <div class="progress-bar ${isOver ? 'over' : ''}" style="width: ${pct.toFixed(1)}%"></div>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${pct.toFixed(0)}% used</div>
+                    </div>
+                    <div class="budget-row">
+                        <label>Scope:</label>
+                        <span class="value">${b.for_excluded ? 'Excluded only' : 'All expenses'}</span>
                     </div>
                 </div>
                 <div class="budget-actions">
@@ -2393,8 +2600,8 @@ async function loadBudgets() {
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     } catch (error) {
         console.error('Error loading budgets:', error);
     }
@@ -2464,53 +2671,22 @@ async function deleteBudget(id) {
 // Load Reports
 async function loadReports() {
     try {
-        const params = new URLSearchParams({
-            period: state.period,
-            include_excluded: false,
-            calendar: state.calendarType
-        });
-        
-        // Add year and month based on calendar type and period
-        if (state.period === 'monthly') {
-            if (state.calendarType === 'badi') {
-                params.append('year', state.badiYear);
-                params.append('month', state.badiMonth);
-            } else {
-                const monthPicker = document.getElementById('monthPicker');
-                if (monthPicker && monthPicker.value) {
-                    const [year, month] = monthPicker.value.split('-');
-                    params.append('year', year);
-                    params.append('month', month);
-                }
-            }
-        } else if (state.period === 'annual') {
-            if (state.calendarType === 'badi') {
-                params.append('year', state.badiYear);
-            } else {
-                const monthPicker = document.getElementById('monthPicker');
-                if (monthPicker && monthPicker.value) {
-                    const [year] = monthPicker.value.split('-');
-                    params.append('year', year);
-                }
-            }
-        }
+        const params = getDateParams();
+        params.append('include_excluded', 'false');
 
         // Load trending data
         const trendingResponse = await apiFetch(`${API_URL}/reports/trending?months=6&type=expense`);
         const trending = await trendingResponse.json();
-
         updateTrendingChart(trending);
 
         // Load budget analysis
         const budgetResponse = await apiFetch(`${API_URL}/reports/budget-analysis?${params}`);
         const budgetAnalysis = await budgetResponse.json();
-
         displayBudgetAnalysis(budgetAnalysis);
 
         // Load category breakdown
         const categoryResponse = await apiFetch(`${API_URL}/reports/by-category?${params}&type=expense`);
         const categoryData = await categoryResponse.json();
-
         displayCategoryBreakdown(categoryData);
     } catch (error) {
         console.error('Error loading reports:', error);

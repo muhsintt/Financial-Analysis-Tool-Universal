@@ -15,22 +15,48 @@ from app.utils.badi_calendar import (
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
 
-def get_date_range(period, year, month=None, week=None, calendar_type='gregorian'):
-    """Get start and end dates for a period. Supports both Gregorian and Badí' calendars."""
+def get_date_range(period, year=None, month=None, week=None, calendar_type='gregorian',
+                   specific_date=None, week_start=None, date_from=None, date_to=None):
+    """Get start and end dates for a period. Supports custom, daily (any day),
+    weekly (any week), monthly, and annual (year-to-date). Handles both
+    Gregorian and Badí' calendars."""
+
+    # ---- Custom range always takes priority ----
+    if period == 'custom':
+        try:
+            start = datetime.strptime(date_from, '%Y-%m-%d').date() if date_from else date.today()
+            end   = datetime.strptime(date_to,   '%Y-%m-%d').date() if date_to   else date.today()
+        except (ValueError, TypeError):
+            start = end = date.today()
+        return start, end
+
     if calendar_type == 'badi':
         # Handle Badí' calendar periods
         if period == 'daily':
-            today = date.today()
-            return today, today
+            if specific_date:
+                try:
+                    d = datetime.strptime(specific_date, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    d = date.today()
+            else:
+                d = date.today()
+            return d, d
         elif period == 'weekly':
-            today = date.today()
-            start = today - timedelta(days=today.weekday())
+            if week_start:
+                try:
+                    start = datetime.strptime(week_start, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    today = date.today()
+                    start = today - timedelta(days=today.weekday())
+            else:
+                today = date.today()
+                start = today - timedelta(days=today.weekday())
             end = start + timedelta(days=6)
             return start, end
         elif period == 'monthly':
             if year is None or month is None:
                 badi_year, badi_month, _ = get_current_badi_date()
-                year = year or badi_year
+                year  = year  or badi_year
                 month = month if month is not None else badi_month
             return get_badi_month_date_range(year, month)
         elif period == 'annual':
@@ -43,11 +69,24 @@ def get_date_range(period, year, month=None, week=None, calendar_type='gregorian
     else:
         # Handle Gregorian calendar periods
         if period == 'daily':
-            today = date.today()
-            return today, today
+            if specific_date:
+                try:
+                    d = datetime.strptime(specific_date, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    d = date.today()
+            else:
+                d = date.today()
+            return d, d
         elif period == 'weekly':
-            today = date.today()
-            start = today - timedelta(days=today.weekday())
+            if week_start:
+                try:
+                    start = datetime.strptime(week_start, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    today = date.today()
+                    start = today - timedelta(days=today.weekday())
+            else:
+                today = date.today()
+                start = today - timedelta(days=today.weekday())
             end = start + timedelta(days=6)
             return start, end
         elif period == 'monthly':
@@ -59,8 +98,12 @@ def get_date_range(period, year, month=None, week=None, calendar_type='gregorian
             last = date(year_obj, month, last_day)
             return first, last
         elif period == 'annual':
-            year_obj = year if year else date.today().year
-            return date(year_obj, 1, 1), date(year_obj, 12, 31)
+            year_obj  = year if year else date.today().year
+            today_obj = date.today()
+            start = date(year_obj, 1, 1)
+            # Year-to-date: for current year end at today; for past years end at Dec 31
+            end = date(year_obj, 12, 31) if year_obj < today_obj.year else today_obj
+            return start, end
         else:
             return date.today(), date.today()
 
@@ -68,12 +111,20 @@ def get_date_range(period, year, month=None, week=None, calendar_type='gregorian
 @login_required
 def get_summary():
     """Get financial summary"""
-    period = request.args.get('period', 'monthly')
-    year = request.args.get('year', type=int)
-    month = request.args.get('month', type=int)
+    period        = request.args.get('period', 'monthly')
+    year          = request.args.get('year', type=int)
+    month         = request.args.get('month', type=int)
     calendar_type = request.args.get('calendar', 'gregorian')
-    
-    start_date, end_date = get_date_range(period, year, month, calendar_type=calendar_type)
+    specific_date = request.args.get('specific_date')
+    week_start    = request.args.get('week_start')
+    date_from     = request.args.get('date_from')
+    date_to       = request.args.get('date_to')
+
+    start_date, end_date = get_date_range(
+        period, year, month, calendar_type=calendar_type,
+        specific_date=specific_date, week_start=week_start,
+        date_from=date_from, date_to=date_to
+    )
     
     # Get all transactions in the date range for current user
     all_transactions = Transaction.query.filter(
@@ -115,14 +166,22 @@ def get_summary():
 @login_required
 def get_by_category():
     """Get expenses/income by category"""
-    period = request.args.get('period', 'monthly')
+    period           = request.args.get('period', 'monthly')
     transaction_type = request.args.get('type', 'expense')
-    year = request.args.get('year', type=int)
-    month = request.args.get('month', type=int)
+    year             = request.args.get('year', type=int)
+    month            = request.args.get('month', type=int)
     include_excluded = request.args.get('include_excluded', 'false').lower() == 'true'
-    calendar_type = request.args.get('calendar', 'gregorian')
-    
-    start_date, end_date = get_date_range(period, year, month, calendar_type=calendar_type)
+    calendar_type    = request.args.get('calendar', 'gregorian')
+    specific_date    = request.args.get('specific_date')
+    week_start       = request.args.get('week_start')
+    date_from        = request.args.get('date_from')
+    date_to          = request.args.get('date_to')
+
+    start_date, end_date = get_date_range(
+        period, year, month, calendar_type=calendar_type,
+        specific_date=specific_date, week_start=week_start,
+        date_from=date_from, date_to=date_to
+    )
     
     query = Transaction.query.filter(
         Transaction.date >= start_date,
@@ -188,13 +247,21 @@ def get_by_category():
 @login_required
 def get_budget_analysis():
     """Get budget vs actual analysis"""
-    period = request.args.get('period', 'monthly')
-    year = request.args.get('year', type=int)
-    month = request.args.get('month', type=int)
+    period           = request.args.get('period', 'monthly')
+    year             = request.args.get('year', type=int)
+    month            = request.args.get('month', type=int)
     include_excluded = request.args.get('include_excluded', 'false').lower() == 'true'
-    calendar_type = request.args.get('calendar', 'gregorian')
-    
-    start_date, end_date = get_date_range(period, year, month, calendar_type=calendar_type)
+    calendar_type    = request.args.get('calendar', 'gregorian')
+    specific_date    = request.args.get('specific_date')
+    week_start       = request.args.get('week_start')
+    date_from        = request.args.get('date_from')
+    date_to          = request.args.get('date_to')
+
+    start_date, end_date = get_date_range(
+        period, year, month, calendar_type=calendar_type,
+        specific_date=specific_date, week_start=week_start,
+        date_from=date_from, date_to=date_to
+    )
     
     # Get all budgets for this period
     budgets = Budget.query.filter_by(period=period, year=year).all()

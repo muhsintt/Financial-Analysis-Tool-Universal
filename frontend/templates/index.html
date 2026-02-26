@@ -102,8 +102,21 @@
                             <option value="weekly">Weekly</option>
                             <option value="monthly" selected>Monthly</option>
                             <option value="annual">Annual</option>
+                            <option value="custom">Custom Range</option>
                         </select>
+                        <!-- Daily picker (Gregorian) -->
+                        <input type="date" id="dayPicker" class="form-control" style="display:none;">
+                        <!-- Weekly picker (Gregorian) -->
+                        <input type="week" id="weekPicker" class="form-control" style="display:none;">
+                        <!-- Monthly picker (Gregorian) -->
                         <input type="month" id="monthPicker" class="form-control">
+                        <!-- Annual picker (Gregorian) -->
+                        <input type="number" id="yearPicker" class="form-control" min="2000" max="2100" style="display:none; width:90px;" placeholder="Year">
+                        <!-- Custom date range -->
+                        <input type="date" id="customStartDate" class="form-control" style="display:none;">
+                        <span id="customRangeSep" style="display:none; align-self:center; white-space:nowrap; padding:0 4px; color:var(--text-muted);">to</span>
+                        <input type="date" id="customEndDate" class="form-control" style="display:none;">
+                        <!-- Badí' calendar selectors -->
                         <select id="badiMonthPicker" class="form-control" style="display: none;">
                             <!-- Badí' months will be populated by JavaScript -->
                         </select>
