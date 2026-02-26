@@ -386,7 +386,7 @@ const state = {
     charts: {},
     sortConfig: {
         field: 'date',
-        direction: 'asc'
+        direction: 'desc'
     },
     currentUser: null,
     isAuthenticated: false
@@ -917,8 +917,8 @@ function applyCalendarSettings() {
         state.badiYear  = parseInt(document.getElementById('badiYearPicker').value);
     }
 
-    // Reset transaction sort to date ascending whenever a date filter is applied
-    state.sortConfig = { field: 'date', direction: 'asc' };
+    // Reset transaction sort to date descending whenever a date filter is applied
+    state.sortConfig = { field: 'date', direction: 'desc' };
 
     // Reload data for whichever page is currently active
     switch (state.currentPage) {
