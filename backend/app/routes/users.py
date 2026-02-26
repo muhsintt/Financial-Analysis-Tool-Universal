@@ -139,7 +139,7 @@ def update_user(id):
         if data['role'] not in User.ROLE_CHOICES:
             return jsonify({'error': 'Role must be superuser, standard, or viewer'}), 400
         # Cannot change role of default admin
-        if user.is_default:
+        if user.is_default and data['role'] != user.role:
             return jsonify({'error': 'Cannot change the role of the default admin'}), 400
         user.role = data['role']
     

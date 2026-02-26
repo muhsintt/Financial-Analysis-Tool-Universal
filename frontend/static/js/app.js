@@ -4558,10 +4558,12 @@ async function handleUserSubmit(e) {
     const userId = document.getElementById('userId').value;
     const username = document.getElementById('userUsername').value.trim();
     const password = document.getElementById('userPassword').value;
-    const role = document.getElementById('userRole').value;
+    const roleSelect = document.getElementById('userRole');
     const calendar_preference = document.getElementById('userCalendarPreference').value;
     
-    const data = { username, role, calendar_preference };
+    const data = { username, calendar_preference };
+    // Only include role if the field is not disabled (i.e. not the default admin)
+    if (!roleSelect.disabled) data.role = roleSelect.value;
     if (password) data.password = password;
     
     try {
