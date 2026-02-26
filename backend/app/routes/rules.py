@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, session
+listfrom flask import Blueprint, request, jsonify, session
 from app import db
 from app.models.categorization_rule import CategorizationRule
 from app.models.category import Category
