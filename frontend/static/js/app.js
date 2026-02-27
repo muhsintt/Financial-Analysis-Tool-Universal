@@ -1996,7 +1996,7 @@ function displayTransactions(transactions) {
     
     if (!transactions || transactions.length === 0) {
         console.log('No transactions to display, setting empty HTML');
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center">No transactions found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center">No transactions found</td></tr>';
         console.log('=== displayTransactions() END (empty) ===');
         return;
     }
@@ -2017,6 +2017,7 @@ function displayTransactions(transactions) {
                 <td><span class="tag ${t.type}">${t.type}</span></td>
                 <td class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</td>
                 <td><span class="tag ${t.is_excluded ? 'excluded' : 'included'}">${t.is_excluded ? 'Excluded' : 'Included'}</span></td>
+                <td class="upload-date-col">${t.source === 'upload' && t.created_at ? t.created_at.substring(0, 10) : '\u2014'}</td>
                 <td>
                     <div class="actions">
                         <button class="btn-icon edit" title="Edit" onclick="editTransaction(${t.id})">
@@ -2040,7 +2041,7 @@ function displayTransactions(transactions) {
         
     } catch (error) {
         console.error('ERROR generating HTML:', error);
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error displaying transactions</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">Error displaying transactions</td></tr>';
     }
     
     console.log('=== displayTransactions() END ===');
@@ -2099,6 +2100,10 @@ function sortTransactions(field) {
                 case 'status':
                     valueA = a.is_excluded ? 1 : 0;
                     valueB = b.is_excluded ? 1 : 0;
+                    break;
+                case 'upload_date':
+                    valueA = (a.source === 'upload' && a.created_at) ? new Date(a.created_at) : new Date(0);
+                    valueB = (b.source === 'upload' && b.created_at) ? new Date(b.created_at) : new Date(0);
                     break;
                 default:
                     return 0;
@@ -2167,6 +2172,10 @@ function filterTransactions() {
             case 'status':
                 valueA = a.is_excluded ? 1 : 0;
                 valueB = b.is_excluded ? 1 : 0;
+                break;
+            case 'upload_date':
+                valueA = (a.source === 'upload' && a.created_at) ? new Date(a.created_at) : new Date(0);
+                valueB = (b.source === 'upload' && b.created_at) ? new Date(b.created_at) : new Date(0);
                 break;
             default:
                 return 0;
