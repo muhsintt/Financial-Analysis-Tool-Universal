@@ -5,6 +5,7 @@ from app.models.category import Category
 from app.models.upload import Upload
 from app.models.activity_log import ActivityLog
 from app.models.log_settings import LogSettings
+from app.models.bank_template import BankTemplate
 from app.routes.auth import write_required, login_required
 from app.utils.file_processor import process_excel_file, process_csv_file
 from datetime import datetime
@@ -165,11 +166,22 @@ def upload_file():
         
         # Process file based on extension
         file_ext = file.filename.rsplit('.', 1)[1].lower()
-        
+
+        # Optional bank template for column mapping
+        template_id  = request.form.get('template_id', type=int)
+        bank_source  = (request.form.get('bank_source') or '').strip() or None
+        column_mapping = None
+        if template_id:
+            tmpl = BankTemplate.query.filter_by(id=template_id, user_id=session['user_id']).first()
+            if tmpl:
+                column_mapping = tmpl.get_mapping()
+                if not bank_source:
+                    bank_source = tmpl.name
+
         if file_ext == 'csv':
-            transactions_data = process_csv_file(filepath, user_id=session['user_id'])
+            transactions_data = process_csv_file(filepath, user_id=session['user_id'], column_mapping=column_mapping)
         else:  # xlsx or xls
-            transactions_data = process_excel_file(filepath, user_id=session['user_id'])
+            transactions_data = process_excel_file(filepath, user_id=session['user_id'], column_mapping=column_mapping)
         
         # Get uploaded_by from request (if provided)
         uploaded_by = request.form.get('uploaded_by', 'system')
@@ -216,6 +228,7 @@ def upload_file():
                 category_id=category_id,
                 source='upload',
                 upload_id=upload_record.id,  # Link to upload record
+                bank_source=bank_source,
                 user_id=session['user_id'],  # Add user isolation
                 notes=trans_data.get('notes', '')
             )
@@ -275,7 +288,33 @@ def preview_file():
         else:
             preview_data = process_excel_file(filepath, limit=10, user_id=session['user_id'])
 
-        # Add category name for each preview row (for real bank statement format)
+        # Detect bank template from the file headers
+        detected_bank = None
+        file_headers = []
+        try:
+            if file_ext == 'csv':
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    file_headers = [h.strip() for h in (next(reader, []))]
+            else:
+                import pandas as pd
+                df_tmp = pd.read_excel(filepath, nrows=0)
+                file_headers = [str(c).strip() for c in df_tmp.columns]
+            file_headers = [h for h in file_headers if h]
+
+            templates = BankTemplate.query.filter_by(user_id=session['user_id']).all()
+            matches = []
+            for t in templates:
+                score = t.match_score(file_headers)
+                if score > 0:
+                    matches.append({'template': t.to_dict(), 'score': round(score, 3)})
+            matches.sort(key=lambda x: x['score'], reverse=True)
+            if matches:
+                detected_bank = matches[0]
+        except Exception:
+            pass  # detection failure is non-fatal
+
+        # Add category name for each preview row
         from app.models.category import Category
         for row in preview_data:
             category_id = row.get('category_id')
@@ -289,7 +328,9 @@ def preview_file():
 
         return jsonify({
             'preview': preview_data,
-            'total_rows': len(preview_data)
+            'total_rows': len(preview_data),
+            'file_headers': file_headers,
+            'detected_bank': detected_bank,
         })
     
     except Exception as e:

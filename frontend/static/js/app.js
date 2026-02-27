@@ -1124,6 +1124,9 @@ function initializeEventListeners() {
     // Initialize Upload History listeners
     initializeUploadHistoryListeners();
 
+    // Initialize Bank Template creator listeners
+    initBankTemplateCreator();
+
     // Initialize Activity Logs listeners
     initializeActivityLogsListeners();
 
@@ -1244,7 +1247,9 @@ function navigateTo(page) {
         'budgets': 'Budgets',
         'reports': 'Reports',
         'rules': 'Categorization Rules',
+        'charts-summaries': 'Charts & Summaries',
         'upload': 'Upload Bank Statement',
+        'bank-templates': 'Bank Templates',
         'settings': 'Settings'
     };
     document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
@@ -1287,6 +1292,10 @@ function navigateTo(page) {
             break;
         case 'upload':
             loadUploadHistory();
+            break;
+        case 'bank-templates':
+            initBankTemplateCreator();
+            loadBankTemplates();
             break;
         case 'settings':
             loadApiStatus();
@@ -1996,7 +2005,7 @@ function displayTransactions(transactions) {
     
     if (!transactions || transactions.length === 0) {
         console.log('No transactions to display, setting empty HTML');
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center">No transactions found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center">No transactions found</td></tr>';
         console.log('=== displayTransactions() END (empty) ===');
         return;
     }
@@ -2017,6 +2026,7 @@ function displayTransactions(transactions) {
                 <td><span class="tag ${t.type}">${t.type}</span></td>
                 <td class="trans-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}</td>
                 <td><span class="tag ${t.is_excluded ? 'excluded' : 'included'}">${t.is_excluded ? 'Excluded' : 'Included'}</span></td>
+                <td class="bank-col">${t.bank_source ? escapeHtml(t.bank_source) : '\u2014'}</td>
                 <td class="upload-date-col">${t.source === 'upload' && t.created_at ? t.created_at.substring(0, 10) : '\u2014'}</td>
                 <td>
                     <div class="actions">
@@ -2041,7 +2051,7 @@ function displayTransactions(transactions) {
         
     } catch (error) {
         console.error('ERROR generating HTML:', error);
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">Error displaying transactions</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Error displaying transactions</td></tr>';
     }
     
     console.log('=== displayTransactions() END ===');
@@ -2100,6 +2110,10 @@ function sortTransactions(field) {
                 case 'status':
                     valueA = a.is_excluded ? 1 : 0;
                     valueB = b.is_excluded ? 1 : 0;
+                    break;
+                case 'bank':
+                    valueA = (a.bank_source || '').toLowerCase();
+                    valueB = (b.bank_source || '').toLowerCase();
                     break;
                 case 'upload_date':
                     valueA = (a.source === 'upload' && a.created_at) ? new Date(a.created_at) : new Date(0);
@@ -2172,6 +2186,10 @@ function filterTransactions() {
             case 'status':
                 valueA = a.is_excluded ? 1 : 0;
                 valueB = b.is_excluded ? 1 : 0;
+                break;
+            case 'bank':
+                valueA = (a.bank_source || '').toLowerCase();
+                valueB = (b.bank_source || '').toLowerCase();
                 break;
             case 'upload_date':
                 valueA = (a.source === 'upload' && a.created_at) ? new Date(a.created_at) : new Date(0);
@@ -3744,6 +3762,7 @@ function generateComparisonCharts(data1, data2, label1, label2) {
 
 // File Upload Handling
 let selectedFile = null;
+let selectedTemplateId = null;
 
 async function handleFileSelect(files) {
     if (!files || files.length === 0) return;
@@ -3773,11 +3792,56 @@ async function handleFileSelect(files) {
 
         const result = await response.json();
         displayPreview(result.preview);
+
+        // Show bank detection bar
+        await populateBankSourceBar(result.detected_bank);
+
         document.getElementById('uploadPreview').style.display = 'block';
     } catch (error) {
         console.error('Error previewing file:', error);
         alert('Error previewing file: ' + error.message);
     }
+}
+
+async function populateBankSourceBar(detectedBank) {
+    const bar    = document.getElementById('bankDetectionBar');
+    const span   = document.getElementById('detectedBankName');
+    const sel    = document.getElementById('bankSourceSelect');
+    if (!bar || !sel) return;
+
+    // Fetch all saved templates
+    let templates = [];
+    try {
+        const r = await apiFetch(`${API_URL}/bank-templates/`);
+        if (r.ok) templates = await r.json();
+    } catch(_) {}
+
+    // Build options
+    sel.innerHTML = '<option value="">\u2014 Unknown \u2014</option>';
+    templates.forEach(t => {
+        sel.innerHTML += `<option value="${t.id}">${escapeHtml(t.name)}</option>`;
+    });
+
+    // Pre-select detected bank
+    if (detectedBank && detectedBank.template) {
+        const tid  = detectedBank.template.id;
+        const name = detectedBank.template.name;
+        const pct  = Math.round(detectedBank.score * 100);
+        sel.value = String(tid);
+        span.textContent = `${name} (${pct}% match)`;
+        selectedTemplateId = tid;
+    } else {
+        span.textContent = templates.length > 0 ? 'No match found' : 'No templates saved yet';
+        selectedTemplateId = null;
+    }
+
+    sel.onchange = () => {
+        selectedTemplateId = sel.value ? parseInt(sel.value) : null;
+        const opt = sel.options[sel.selectedIndex];
+        span.textContent = sel.value ? opt.text : '\u2014 Unknown \u2014';
+    };
+
+    bar.style.display = 'block';
 }
 
 function displayPreview(data) {
@@ -3802,6 +3866,11 @@ async function confirmUpload() {
     // Add uploaded_by from current user
     if (state.currentUser) {
         formData.append('uploaded_by', state.currentUser.username);
+    }
+
+    // Bank template (for column mapping + bank tagging)
+    if (selectedTemplateId) {
+        formData.append('template_id', selectedTemplateId);
     }
 
     try {
@@ -3849,8 +3918,11 @@ async function confirmUpload() {
 // Utility to reset upload state/UI
 function resetUploadUI() {
     selectedFile = null;
+    selectedTemplateId = null;
     document.getElementById('uploadPreview').style.display = 'none';
     document.getElementById('fileInput').value = '';
+    const bar = document.getElementById('bankDetectionBar');
+    if (bar) bar.style.display = 'none';
     const statusDiv = document.getElementById('uploadStatus');
     if (statusDiv) {
         statusDiv.style.display = 'none';
@@ -3865,6 +3937,207 @@ function resetUploadUI() {
 const cancelBtn = document.getElementById('cancelUploadBtn');
 if (cancelBtn) {
     cancelBtn.addEventListener('click', resetUploadUI);
+}
+
+// ==========================================
+// Bank Templates
+// ==========================================
+
+let btFileHeaders = [];
+let btCreatorInitialised = false;
+
+function initBankTemplateCreator() {
+    if (btCreatorInitialised) return;
+    const btUploadArea = document.getElementById('btUploadArea');
+    if (!btUploadArea) return;
+    btCreatorInitialised = true;
+
+    const btFileInput  = document.getElementById('btFileInput');
+    const btBrowseBtn  = document.getElementById('btBrowseBtn');
+
+    btBrowseBtn.addEventListener('click', () => btFileInput.click());
+    btFileInput.addEventListener('change', (e) => handleBtFileSelect(e.target.files));
+
+    btUploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        btUploadArea.style.borderColor = '#27ae60';
+    });
+    btUploadArea.addEventListener('dragleave', () => {
+        btUploadArea.style.borderColor = '#3498db';
+    });
+    btUploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        btUploadArea.style.borderColor = '#3498db';
+        handleBtFileSelect(e.dataTransfer.files);
+    });
+
+    document.getElementById('btSaveBtn').addEventListener('click', saveBankTemplate);
+    document.getElementById('btCancelBtn').addEventListener('click', resetBtUI);
+}
+
+async function handleBtFileSelect(files) {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const response = await apiFetch(`${API_URL}/bank-templates/detect`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) throw new Error('Failed to read file headers');
+        const result = await response.json();
+        btFileHeaders = result.file_headers || [];
+
+        populateBtColumnSelects(btFileHeaders);
+        autoFillBtMapping(btFileHeaders);
+        document.getElementById('btHeadersDisplay').textContent = btFileHeaders.join(', ');
+        document.getElementById('btStep1').style.display = 'none';
+        document.getElementById('btStep2').style.display = 'block';
+    } catch (err) {
+        alert('Error reading file: ' + err.message);
+    }
+}
+
+function populateBtColumnSelects(headers) {
+    ['btDateCol','btDescCol','btAmountCol','btCategoryCol'].forEach(id => {
+        const sel = document.getElementById(id);
+        const isOpt = id === 'btCategoryCol';
+        sel.innerHTML = `<option value="">\u2014 ${isOpt ? 'none' : 'select'} \u2014</option>`;
+        headers.forEach(h => {
+            sel.innerHTML += `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`;
+        });
+    });
+}
+
+function autoFillBtMapping(headers) {
+    const low = headers.map(h => h.toLowerCase());
+    const find = (kws) => {
+        for (const kw of kws) {
+            const i = low.findIndex(h => h === kw || h.includes(kw));
+            if (i !== -1) return headers[i];
+        }
+        return '';
+    };
+    document.getElementById('btDateCol').value    = find(['post date','posted date','transaction date','trans date','date']);
+    document.getElementById('btDescCol').value    = find(['payee','description','merchant','memo','narration','details']);
+    document.getElementById('btAmountCol').value  = find(['amount','transaction amount','debit','value','sum']);
+    document.getElementById('btCategoryCol').value = find(['category','type']);
+}
+
+async function saveBankTemplate() {
+    const name       = document.getElementById('btBankName').value.trim();
+    const date_col   = document.getElementById('btDateCol').value;
+    const desc_col   = document.getElementById('btDescCol').value;
+    const amount_col = document.getElementById('btAmountCol').value;
+    const cat_col    = document.getElementById('btCategoryCol').value;
+
+    if (!name)       { alert('Please enter a bank name.'); return; }
+    if (!date_col)   { alert('Please select the Date column.'); return; }
+    if (!desc_col)   { alert('Please select the Description / Payee column.'); return; }
+    if (!amount_col) { alert('Please select the Amount column.'); return; }
+
+    const column_mapping = { date_col, description_col: desc_col, amount_col };
+    if (cat_col) column_mapping.category_col = cat_col;
+
+    try {
+        const response = await apiFetch(`${API_URL}/bank-templates/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, headers: btFileHeaders, column_mapping })
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            alert(err.error || 'Failed to save template');
+            return;
+        }
+        showNotification('Bank template saved!', 'success');
+        resetBtUI();
+        loadBankTemplates();
+    } catch (err) {
+        alert('Error saving template: ' + err.message);
+    }
+}
+
+function resetBtUI() {
+    btFileHeaders = [];
+    document.getElementById('btStep1').style.display = 'block';
+    document.getElementById('btStep2').style.display = 'none';
+    const fi = document.getElementById('btFileInput');
+    if (fi) fi.value = '';
+    const bn = document.getElementById('btBankName');
+    if (bn) bn.value = '';
+}
+
+async function loadBankTemplates() {
+    try {
+        const response = await apiFetch(`${API_URL}/bank-templates/`);
+        if (!response.ok) throw new Error('Failed to load templates');
+        displayBankTemplates(await response.json());
+    } catch (err) {
+        console.error('Error loading bank templates:', err);
+    }
+}
+
+function displayBankTemplates(templates) {
+    const container = document.getElementById('bankTemplatesList');
+    if (!container) return;
+
+    if (!templates || templates.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-muted,#888);">No templates saved yet. Create one above.</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align:left;padding:8px 12px;border-bottom:2px solid var(--border-color,#e0e0e0);">Bank Name</th>
+                    <th style="text-align:left;padding:8px 12px;border-bottom:2px solid var(--border-color,#e0e0e0);">Column Mapping</th>
+                    <th style="text-align:left;padding:8px 12px;border-bottom:2px solid var(--border-color,#e0e0e0);">Headers Detected</th>
+                    <th style="text-align:left;padding:8px 12px;border-bottom:2px solid var(--border-color,#e0e0e0);">Created</th>
+                    <th style="padding:8px 12px;border-bottom:2px solid var(--border-color,#e0e0e0);">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${templates.map(t => `
+                    <tr>
+                        <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);font-weight:600;">${escapeHtml(t.name)}</td>
+                        <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);font-size:0.85rem;">
+                            Date: <em>${escapeHtml(t.column_mapping.date_col || '')}</em><br>
+                            Desc: <em>${escapeHtml(t.column_mapping.description_col || '')}</em><br>
+                            Amt: <em>${escapeHtml(t.column_mapping.amount_col || '')}</em>
+                            ${t.column_mapping.category_col ? `<br>Cat: <em>${escapeHtml(t.column_mapping.category_col)}</em>` : ''}
+                        </td>
+                        <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);font-size:0.8rem;color:var(--text-muted,#888);">${(t.headers || []).join(', ')}</td>
+                        <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);font-size:0.85rem;">${t.created_at ? t.created_at.substring(0, 10) : '\u2014'}</td>
+                        <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);text-align:center;">
+                            <button class="btn-icon delete" title="Delete template" onclick="deleteBankTemplate(${t.id}, '${escapeHtml(t.name)}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+async function deleteBankTemplate(id, name) {
+    if (!confirm(`Delete template "${name}"?`)) return;
+    try {
+        const response = await apiFetch(`${API_URL}/bank-templates/${id}`, { method: 'DELETE' });
+        if (!response.ok) {
+            const err = await response.json();
+            alert(err.error || 'Failed to delete template');
+            return;
+        }
+        showNotification('Template deleted', 'success');
+        loadBankTemplates();
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
 }
 
 // ==========================================

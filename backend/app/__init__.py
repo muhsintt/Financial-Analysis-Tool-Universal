@@ -59,6 +59,7 @@ def create_app():
     from app.routes.users import users_bp
     from app.routes.calendar import bp as calendar_bp
     from app.routes.activity import bp as activity_bp
+    from app.routes.bank_templates import bank_templates_bp
     
     app.register_blueprint(transactions_bp)
     app.register_blueprint(budgets_bp)
@@ -71,6 +72,7 @@ def create_app():
     app.register_blueprint(users_bp)
     app.register_blueprint(calendar_bp)
     app.register_blueprint(activity_bp)
+    app.register_blueprint(bank_templates_bp)
     
     # Authentication Middleware
     @app.before_request

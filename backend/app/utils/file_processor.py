@@ -77,57 +77,100 @@ def categorize_transaction(description, category_id=None, user_id=None):
     return default_category.id if default_category else None
 
 
-def process_csv_file(filepath, limit=None, user_id=None):
-    """Process CSV file and extract transactions"""
+def _parse_date(date_str):
+    """Try multiple date formats and return a date object, or None."""
+    for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m-%d-%Y', '%d/%m/%Y', '%Y/%m/%d'):
+        try:
+            return datetime.strptime(date_str.strip(), fmt).date()
+        except:
+            pass
+    return None
+
+
+def process_csv_file(filepath, limit=None, user_id=None, column_mapping=None):
+    """Process CSV file and extract transactions.
+
+    column_mapping (optional) is a dict with keys:
+        date_col, description_col, amount_col, category_col (optional)
+    When provided, those exact column names are used and all other columns
+    are collected into the transaction notes.
+    """
     transactions = []
-    
+
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
-            
+
             for i, row in enumerate(reader):
                 if limit and i >= limit:
                     break
-                
-                # Try to detect date, description, and amount columns
-                date_str = row.get('Date') or row.get('date') or row.get('Transaction Date')
-                desc = row.get('Description') or row.get('description') or row.get('Memo')
-                amount_str = row.get('Amount') or row.get('amount') or row.get('Debit')
-                
+
+                if column_mapping:
+                    date_str   = row.get(column_mapping['date_col'], '')
+                    desc       = row.get(column_mapping['description_col'], '')
+                    amount_str = row.get(column_mapping['amount_col'], '')
+                    cat_str    = row.get(column_mapping.get('category_col', ''), '') if column_mapping.get('category_col') else ''
+                    # Collect extra columns into notes
+                    known = {column_mapping['date_col'], column_mapping['description_col'], column_mapping['amount_col']}
+                    if column_mapping.get('category_col'):
+                        known.add(column_mapping['category_col'])
+                    notes = ' | '.join(f"{k}: {v}" for k, v in row.items() if k not in known and str(v).strip())
+                else:
+                    date_str   = (row.get('Date') or row.get('date') or row.get('Transaction Date')
+                                  or row.get('Post Date') or row.get('Posted Date') or '')
+                    desc       = (row.get('Description') or row.get('description')
+                                  or row.get('Memo') or row.get('Payee') or row.get('payee') or '')
+                    amount_str = (row.get('Amount') or row.get('amount')
+                                  or row.get('Debit') or '')
+                    cat_str    = row.get('Category') or row.get('category') or ''
+                    notes      = ''
+
                 if not all([date_str, desc, amount_str]):
                     continue
-                
+
+                transaction_date = _parse_date(str(date_str))
+                if transaction_date is None:
+                    continue
+
                 try:
-                    # Parse date
-                    transaction_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                except:
-                    try:
-                        transaction_date = datetime.strptime(date_str, '%m/%d/%Y').date()
-                    except:
-                        continue
-                
-                # Parse amount
-                amount = float(amount_str.replace('$', '').replace(',', ''))
-                
+                    amount = float(str(amount_str).replace('$', '').replace(',', ''))
+                except (ValueError, TypeError):
+                    continue
+
                 trans_type = detect_transaction_type(desc, amount)
-                amount = abs(amount)  # Store as positive
-                category_id = categorize_transaction(desc, user_id=user_id)
-                
+                amount = abs(amount)
+
+                # Category: honour CSV value from template if present, else auto-detect
+                category_id = None
+                if cat_str and column_mapping:
+                    from app.models.category import Category
+                    cat = Category.query.filter_by(name=cat_str.strip(), user_id=user_id).first()
+                    if not cat:
+                        cat = Category.query.filter(Category.name.ilike(cat_str.strip())).first()
+                    if cat:
+                        category_id = cat.id
+                if not category_id:
+                    category_id = categorize_transaction(desc, user_id=user_id)
+
                 transactions.append({
                     'date': transaction_date,
                     'description': desc.strip(),
                     'amount': amount,
                     'type': trans_type,
-                    'category_id': category_id
+                    'category_id': category_id,
+                    'notes': notes,
                 })
-        
+
         return transactions
-    
+
     except Exception as e:
         raise Exception(f"Error processing CSV: {str(e)}")
 
-def process_excel_file(filepath, limit=None, user_id=None):
-    """Process Excel file and extract transactions"""
+def process_excel_file(filepath, limit=None, user_id=None, column_mapping=None):
+    """Process Excel file and extract transactions.
+
+    column_mapping (optional) has the same shape as for process_csv_file.
+    """
     transactions = []
     
     try:
@@ -144,30 +187,49 @@ def process_excel_file(filepath, limit=None, user_id=None):
             
             # Map columns with exact name matching (highest priority)
             column_map = {col.lower(): col for col in df.columns}
-            
-            # Try exact matches first
-            if 'posted date' in column_map:
-                date_val = row[column_map['posted date']]
-            elif 'date' in column_map:
-                date_val = row[column_map['date']]
-            elif 'transaction date' in column_map:
-                date_val = row[column_map['transaction date']]
-            
-            # Payee is the best description match
-            if 'payee' in column_map:
-                desc_val = row[column_map['payee']]
-            elif 'description' in column_map:
-                desc_val = row[column_map['description']]
-            elif 'memo' in column_map:
-                desc_val = row[column_map['memo']]
-            
-            # Amount
-            if 'amount' in column_map:
-                amount_val = row[column_map['amount']]
-            elif 'debit' in column_map:
-                amount_val = row[column_map['debit']]
-            elif 'credit' in column_map:
-                amount_val = row[column_map['credit']]
+
+            cat_val = None
+            notes_str = ''
+
+            if column_mapping:
+                date_val   = row.get(column_mapping['date_col'])
+                desc_val   = row.get(column_mapping['description_col'])
+                amount_val = row.get(column_mapping['amount_col'])
+                if column_mapping.get('category_col'):
+                    cat_val = row.get(column_mapping['category_col'])
+                known = {column_mapping['date_col'], column_mapping['description_col'], column_mapping['amount_col']}
+                if column_mapping.get('category_col'):
+                    known.add(column_mapping['category_col'])
+                notes_str = ' | '.join(
+                    f"{k}: {v}" for k, v in row.items()
+                    if k not in known and not pd.isna(v) and str(v).strip()
+                )
+            else:
+                # Try exact matches first
+                if 'posted date' in column_map:
+                    date_val = row[column_map['posted date']]
+                elif 'post date' in column_map:
+                    date_val = row[column_map['post date']]
+                elif 'date' in column_map:
+                    date_val = row[column_map['date']]
+                elif 'transaction date' in column_map:
+                    date_val = row[column_map['transaction date']]
+
+                # Payee is the best description match
+                if 'payee' in column_map:
+                    desc_val = row[column_map['payee']]
+                elif 'description' in column_map:
+                    desc_val = row[column_map['description']]
+                elif 'memo' in column_map:
+                    desc_val = row[column_map['memo']]
+
+                # Amount
+                if 'amount' in column_map:
+                    amount_val = row[column_map['amount']]
+                elif 'debit' in column_map:
+                    amount_val = row[column_map['debit']]
+                elif 'credit' in column_map:
+                    amount_val = row[column_map['credit']]
             
             # Skip if missing required fields or if they are NaN
             if date_val is None or desc_val is None or amount_val is None:
@@ -207,18 +269,30 @@ def process_excel_file(filepath, limit=None, user_id=None):
             
             trans_type = detect_transaction_type(str(desc_val), amount)
             amount = abs(amount)
-            category_id = categorize_transaction(str(desc_val), user_id=user_id)
-            
+
+            # Category from template column if present, else auto-detect
+            category_id = None
+            if cat_val is not None and not pd.isna(cat_val) and str(cat_val).strip():
+                from app.models.category import Category
+                cat = Category.query.filter_by(name=str(cat_val).strip(), user_id=user_id).first()
+                if not cat:
+                    cat = Category.query.filter(Category.name.ilike(str(cat_val).strip())).first()
+                if cat:
+                    category_id = cat.id
+            if not category_id:
+                category_id = categorize_transaction(str(desc_val), user_id=user_id)
+
             transactions.append({
                 'date': transaction_date,
                 'description': str(desc_val).strip(),
                 'amount': amount,
                 'type': trans_type,
-                'category_id': category_id
+                'category_id': category_id,
+                'notes': notes_str,
             })
-        
+
         return transactions
-    
+
     except Exception as e:
         raise Exception(f"Error processing Excel: {str(e)}")
 

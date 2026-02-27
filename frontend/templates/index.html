@@ -75,7 +75,15 @@
                             <li><a href="#charts-summaries" class="nav-link sub-link" data-page="charts-summaries"><i class="fas fa-chart-pie"></i> Charts & Summaries</a></li>
                         </ul>
                     </li>
-                    <li><a href="#upload" class="nav-link" data-page="upload"><i class="fas fa-upload"></i> Upload</a></li>
+                    <li class="has-submenu">
+                        <a href="#upload" class="nav-link" data-page="upload">
+                            <i class="fas fa-upload"></i> Upload
+                            <i class="fas fa-chevron-down submenu-arrow"></i>
+                        </a>
+                        <ul class="submenu">
+                            <li><a href="#bank-templates" class="nav-link sub-link" data-page="bank-templates"><i class="fas fa-university"></i> Bank Templates</a></li>
+                        </ul>
+                    </li>
                     <li><a href="#settings" class="nav-link" data-page="settings"><i class="fas fa-cog"></i> Settings</a></li>
                 </ul>
             </nav>
@@ -284,6 +292,7 @@
                                     <th class="sortable" data-sort-field="type" onclick="sortTransactions('type')">Type <span class="sort-indicator"></span></th>
                                     <th class="sortable" data-sort-field="amount" onclick="sortTransactions('amount')">Amount <span class="sort-indicator"></span></th>
                                     <th class="sortable" data-sort-field="status" onclick="sortTransactions('status')">Status <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-sort-field="bank" onclick="sortTransactions('bank')">Bank <span class="sort-indicator"></span></th>
                                     <th class="sortable" data-sort-field="upload_date" onclick="sortTransactions('upload_date')">Upload Date <span class="sort-indicator"></span></th>
                                     <th>Actions</th>
                                 </tr>
@@ -1171,6 +1180,25 @@
                                 <p>Drag and drop your file here or <button type="button" class="link-btn" id="browseBtn">browse</button></p>
                             </div>
                             
+                            <div id="bankDetectionBar" style="display:none; margin-bottom:12px; padding:10px 14px; background:var(--bg-secondary,#f4f6f9); border-radius:6px; border:1px solid var(--border-color,#e0e0e0);">
+                                <strong><i class="fas fa-university"></i> Detected Bank:</strong>
+                                <span id="detectedBankName" style="margin:0 10px;">—</span>
+                                <label style="margin-left:4px;">Change: 
+                                    <select id="bankSourceSelect" class="form-control" style="display:inline-block;width:auto;margin-left:6px;">
+                                        <option value="">— Unknown —</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div id="bankDetectionBar" style="display:none; margin-bottom:12px; padding:10px 14px; background:var(--bg-secondary,#f4f6f9); border-radius:6px; border:1px solid var(--border-color,#e0e0e0);">
+                                <strong><i class="fas fa-university"></i> Detected Bank:</strong>
+                                <span id="detectedBankName" style="margin:0 10px;">—</span>
+                                <label style="margin-left:4px;">Change:
+                                    <select id="bankSourceSelect" class="form-control" style="display:inline-block;width:auto;margin-left:6px;">
+                                        <option value="">— Unknown —</option>
+                                    </select>
+                                </label>
+                            </div>
+
                             <div id="uploadPreview" class="upload-preview" style="display:none;">
                                 <h4>Preview (First 10 rows)</h4>
                                 <table>
@@ -1238,6 +1266,88 @@
                                     <i class="fas fa-trash"></i> Delete Selected
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bank Templates Page -->
+                <div id="bank-templates" class="page">
+                    <div class="page-header">
+                        <h2><i class="fas fa-university"></i> Bank Templates</h2>
+                        <p style="color:var(--text-muted,#888);margin-top:4px;">Save a sample CSV from your bank so the app can automatically recognise it on upload and tag transactions with the bank name.</p>
+                    </div>
+
+                    <!-- Create template -->
+                    <div class="card" style="margin-bottom:24px;">
+                        <div class="card-header"><h3>Create New Template</h3></div>
+                        <div class="card-body">
+                            <!-- Step 1: choose file -->
+                            <div id="btStep1">
+                                <p>Upload a sample CSV / Excel file from this bank to extract its column headers.</p>
+                                <div class="upload-area" id="btUploadArea" style="padding:20px;">
+                                    <input type="file" id="btFileInput" accept=".csv,.xlsx,.xls" hidden>
+                                    <p>Drag &amp; drop a sample file or <button type="button" class="link-btn" id="btBrowseBtn">browse</button></p>
+                                </div>
+                            </div>
+                            <!-- Step 2: naming + mapping (hidden until file loaded) -->
+                            <div id="btStep2" style="display:none;">
+                                <div class="form-group">
+                                    <label>Bank Name</label>
+                                    <input type="text" id="btBankName" class="form-control" list="knownBanksList" placeholder="e.g. Chase, Bank of America…" style="max-width:320px;">
+                                    <datalist id="knownBanksList">
+                                        <option value="American Express">
+                                        <option value="Ally Bank">
+                                        <option value="Bank of America">
+                                        <option value="Capital One">
+                                        <option value="Chase">
+                                        <option value="Citibank">
+                                        <option value="Discover">
+                                        <option value="Fifth Third Bank">
+                                        <option value="PNC Bank">
+                                        <option value="TD Bank">
+                                        <option value="US Bank">
+                                        <option value="Wells Fargo">
+                                    </datalist>
+                                </div>
+                                <p style="margin-bottom:6px;">Map the important columns (select from the headers found in your file):</p>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:600px;">
+                                    <div class="form-group">
+                                        <label>Post / Transaction Date *</label>
+                                        <select id="btDateCol" class="form-control"><option value="">— select —</option></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Payee / Description *</label>
+                                        <select id="btDescCol" class="form-control"><option value="">— select —</option></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Amount *</label>
+                                        <select id="btAmountCol" class="form-control"><option value="">— select —</option></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Category (optional)</label>
+                                        <select id="btCategoryCol" class="form-control"><option value="">— none —</option></select>
+                                    </div>
+                                </div>
+                                <div style="margin-top:8px;">
+                                    <strong>All headers found:</strong>
+                                    <p id="btHeadersDisplay" style="font-size:0.85rem;color:var(--text-muted,#888);"></p>
+                                </div>
+                                <div class="form-actions" style="margin-top:12px;">
+                                    <button class="btn btn-primary" id="btSaveBtn">Save Template</button>
+                                    <button class="btn btn-secondary" id="btCancelBtn" style="margin-left:8px;">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Saved templates list -->
+                    <div class="card">
+                        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                            <h3>Saved Templates</h3>
+                            <button class="btn btn-sm btn-secondary" onclick="loadBankTemplates()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                        </div>
+                        <div class="card-body">
+                            <div id="bankTemplatesList"></div>
                         </div>
                     </div>
                 </div>

@@ -13,6 +13,7 @@ class Transaction(db.Model):
     is_excluded = db.Column(db.Boolean, default=False)
     source = db.Column(db.String(100), default='manual')  # 'manual' or 'upload'
     upload_id = db.Column(db.Integer, db.ForeignKey('uploads.id'), nullable=True)  # Link to upload
+    bank_source = db.Column(db.String(100), nullable=True)  # Bank name from template
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # User isolation
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -41,6 +42,7 @@ class Transaction(db.Model):
             'is_excluded': self.is_excluded,
             'source': self.source,
             'upload_id': self.upload_id,
+            'bank_source': self.bank_source,
             'notes': self.notes,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
