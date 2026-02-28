@@ -97,8 +97,11 @@ def create_transaction():
     if data['type'] not in ['income', 'expense']:
         return jsonify({'error': 'Type must be income or expense'}), 400
     
-    # Verify category exists and belongs to current user
-    category = Category.query.filter_by(id=data['category_id'], user_id=session['user_id']).first()
+    # Verify category exists and belongs to current user (or is a system category)
+    category = Category.query.filter(
+        Category.id == data['category_id'],
+        db.or_(Category.user_id == session['user_id'], Category.user_id.is_(None))
+    ).first()
     if not category:
         return jsonify({'error': 'Category not found'}), 404
     
@@ -140,7 +143,10 @@ def update_transaction(id):
     if 'date' in data:
         transaction.date = datetime.strptime(data['date'], '%Y-%m-%d').date()
     if 'category_id' in data:
-        category = Category.query.filter_by(id=data['category_id'], user_id=session['user_id']).first()
+        category = Category.query.filter(
+            Category.id == data['category_id'],
+            db.or_(Category.user_id == session['user_id'], Category.user_id.is_(None))
+        ).first()
         if not category:
             return jsonify({'error': 'Category not found'}), 404
         transaction.category_id = data['category_id']
@@ -199,7 +205,10 @@ def change_category(category_id):
     if not new_category_id or not transaction_ids:
         return jsonify({'error': 'Missing new_category_id or transaction_ids'}), 400
     
-    category = Category.query.filter_by(id=new_category_id, user_id=session['user_id']).first()
+    category = Category.query.filter(
+        Category.id == new_category_id,
+        db.or_(Category.user_id == session['user_id'], Category.user_id.is_(None))
+    ).first()
     if not category:
         return jsonify({'error': 'Category not found'}), 404
     
@@ -236,7 +245,10 @@ def bulk_update():
     # Update category if provided
     if 'category_id' in data:
         category_id = data.get('category_id')
-        category = Category.query.filter_by(id=category_id, user_id=session['user_id']).first()
+        category = Category.query.filter(
+            Category.id == category_id,
+            db.or_(Category.user_id == session['user_id'], Category.user_id.is_(None))
+        ).first()
         if not category:
             return jsonify({'error': 'Category not found'}), 404
         
