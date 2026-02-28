@@ -2230,7 +2230,7 @@ async function handleTransactionSubmit(e) {
         
         const method = state.currentTransaction ? 'PUT' : 'POST';
         
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
             method: method,
             headers: {
                 'Content-Type': 'application/json'
