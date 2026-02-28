@@ -1170,7 +1170,6 @@ function initializeEventListeners() {
 
     document.getElementById('confirmUploadBtn').addEventListener('click', confirmUpload);
     document.getElementById('cancelUploadBtn').addEventListener('click', resetUploadUI);
-    document.getElementById('cancelUploadBtn').style.display = 'none';
 
     // Modal close buttons
     document.querySelectorAll('.close').forEach(btn => {
