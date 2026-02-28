@@ -1791,8 +1791,8 @@ async function loadDashboard() {
         const summaryResponse = await apiFetch(`${API_URL}/reports/summary?${params}`);
         const summary = await summaryResponse.json();
 
-        document.getElementById('totalIncome').textContent   = formatCurrency(summary.total_income);
-        document.getElementById('totalExpense').textContent  = formatCurrency(summary.total_expense);
+        document.getElementById('totalIncome').textContent   = formatCurrency(summary.included_income);
+        document.getElementById('totalExpense').textContent  = formatCurrency(summary.included_expense);
         document.getElementById('netBalance').textContent    = formatCurrency(summary.net);
         document.getElementById('totalExcluded').textContent = formatCurrency(summary.total_excluded);
 
