@@ -185,6 +185,8 @@ def create_app():
     # Create tables and initialize defaults
     with app.app_context():
         db.create_all()
+        # Run any pending schema migrations
+        _run_migrations(app)
         # Create default admin user
         from app.models.user import User
         User.create_default_admin()
@@ -192,6 +194,23 @@ def create_app():
         _initialize_default_rules()
     
     return app
+
+
+def _run_migrations(app):
+    """Apply incremental schema migrations that db.create_all() won't handle
+    (adding columns to existing tables)."""
+    from sqlalchemy import text
+    with app.app_context():
+        with db.engine.connect() as conn:
+            # --- Migration: add session_timeout to users ---
+            result = conn.execute(text("PRAGMA table_info(users)"))
+            columns = {row[1] for row in result.fetchall()}
+            if 'session_timeout' not in columns:
+                conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN session_timeout INTEGER NOT NULL DEFAULT 15"
+                ))
+                conn.commit()
+                print("✓ Migration applied: added session_timeout column to users table")
 
 
 def _initialize_default_rules():
