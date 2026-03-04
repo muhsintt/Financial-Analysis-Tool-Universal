@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.activity_log import ActivityLog
 from app.models.log_settings import LogSettings
 from functools import wraps
+from datetime import datetime
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
@@ -93,6 +94,7 @@ def login():
     session['user_id'] = user.id
     session['username'] = user.username
     session['role'] = user.role
+    session['last_activity'] = datetime.utcnow().isoformat()
     session.permanent = True
     
     # Log successful login
@@ -178,3 +180,48 @@ def change_password():
     )
     
     return jsonify({'message': 'Password changed successfully'})
+
+
+@auth_bp.route('/session-config', methods=['GET'])
+@login_required
+def get_session_config():
+    """Get the current user's session timeout setting"""
+    user = User.query.get(session['user_id'])
+    return jsonify({
+        'session_timeout': user.session_timeout if user.session_timeout is not None else User.DEFAULT_SESSION_TIMEOUT,
+        'last_activity': session.get('last_activity')
+    })
+
+
+@auth_bp.route('/session-config', methods=['PUT'])
+@login_required
+def update_session_config():
+    """Update the current user's session timeout (any logged-in user can update their own)"""
+    data = request.get_json()
+    timeout = data.get('session_timeout')
+
+    if timeout is None:
+        return jsonify({'error': 'session_timeout is required'}), 400
+
+    try:
+        timeout = int(timeout)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'session_timeout must be an integer'}), 400
+
+    if timeout < 1:
+        return jsonify({'error': 'session_timeout must be at least 1 minute'}), 400
+    if timeout > 480:
+        return jsonify({'error': 'session_timeout cannot exceed 480 minutes (8 hours)'}), 400
+
+    user = User.query.get(session['user_id'])
+    user.session_timeout = timeout
+    db.session.commit()
+
+    log_activity(
+        ActivityLog.ACTION_UPDATE,
+        ActivityLog.CATEGORY_AUTH,
+        f'User {user.username} updated their session timeout to {timeout} minutes',
+        {'user_id': user.id, 'session_timeout': timeout}
+    )
+
+    return jsonify({'message': 'Session timeout updated', 'session_timeout': timeout})

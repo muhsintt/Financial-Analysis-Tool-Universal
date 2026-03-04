@@ -358,10 +358,26 @@ async function apiFetch(url, options = {}) {
     
     // Handle authentication errors
     if (response.status === 401) {
-        // Session expired, redirect to login
+        let isExpired = false;
+        try {
+            const cloned = response.clone();
+            const data = await cloned.json();
+            isExpired = data.session_expired === true;
+        } catch (e) {}
+
         state.isAuthenticated = false;
         state.currentUser = null;
+        stopSessionTimeoutTracking();
+        closeModal('sessionTimeoutModal');
         showLoginScreen();
+
+        if (isExpired) {
+            const errorDiv = document.getElementById('loginError');
+            if (errorDiv) {
+                errorDiv.textContent = 'Your session expired due to inactivity. Please log in again.';
+                errorDiv.style.display = 'block';
+            }
+        }
         throw new Error('Session expired. Please login again.');
     }
     
@@ -458,6 +474,9 @@ function showMainApp() {
     // Apply calendar preference filtering
     applyCalendarPreference();
     
+    // Start session idle timeout tracking
+    startSessionTimeoutTracking();
+
     // Ensure we always start on dashboard after login
     navigateTo('dashboard');
     
@@ -628,10 +647,12 @@ async function handleLogout() {
         console.error('Logout error:', error);
     }
     
+    stopSessionTimeoutTracking();
     state.isAuthenticated = false;
     state.currentUser = null;
     state.currentPage = 'dashboard';  // Reset to dashboard on logout
     document.body.classList.remove('read-only');
+    closeModal('sessionTimeoutModal');
     showLoginScreen();
     
     // Clear form
@@ -1300,6 +1321,7 @@ function navigateTo(page) {
             loadApiStatus();
             loadUsers();
             loadActivityLogs();
+            loadMyAccountSection();
             break;
     }
 }
@@ -4755,6 +4777,7 @@ function renderUsersTable(users) {
             <td class="calendar-cell">
                 <span class="calendar-badge ${user.calendar_preference || 'both'}">${calendarLabels[user.calendar_preference] || 'Both'}</span>
             </td>
+            <td class="timeout-cell">${user.session_timeout || 15} min</td>
             <td>${new Date(user.created_at).toLocaleDateString()}</td>
             <td class="actions-cell">
                 <button class="btn-icon edit" onclick="editUser(${user.id})" title="Edit">
@@ -4780,6 +4803,7 @@ function openUserModal(user = null) {
     const roleSelect = document.getElementById('userRole');
     const usernameInput = document.getElementById('userUsername');
     const calendarPreferenceSelect = document.getElementById('userCalendarPreference');
+    const sessionTimeoutInput = document.getElementById('userSessionTimeout');
     
     form.reset();
     document.getElementById('userId').value = '';
@@ -4795,6 +4819,7 @@ function openUserModal(user = null) {
         usernameInput.value = user.username;
         roleSelect.value = user.role;
         calendarPreferenceSelect.value = user.calendar_preference || 'both';
+        if (sessionTimeoutInput) sessionTimeoutInput.value = user.session_timeout || 15;
         
         // Disable username and role for default admin, but allow calendar preference change
         if (user.is_default) {
@@ -4815,6 +4840,7 @@ function openUserModal(user = null) {
         usernameInput.disabled = false;
         roleSelect.disabled = false;
         calendarPreferenceSelect.value = 'both';
+        if (sessionTimeoutInput) sessionTimeoutInput.value = 15;
     }
     
     openModal('userModal');
@@ -4844,8 +4870,10 @@ async function handleUserSubmit(e) {
     const password = document.getElementById('userPassword').value;
     const roleSelect = document.getElementById('userRole');
     const calendar_preference = document.getElementById('userCalendarPreference').value;
+    const sessionTimeoutVal = document.getElementById('userSessionTimeout');
+    const session_timeout = sessionTimeoutVal ? (parseInt(sessionTimeoutVal.value) || 15) : 15;
     
-    const data = { username, calendar_preference };
+    const data = { username, calendar_preference, session_timeout };
     // Only include role if the field is not disabled (i.e. not the default admin)
     if (!roleSelect.disabled) data.role = roleSelect.value;
     if (password) data.password = password;
@@ -5901,3 +5929,172 @@ function showNotification(message, type = 'info', duration = 3000) {
         }, 300);
     }, duration);
 }
+
+// ============================================================
+// SESSION IDLE TIMEOUT TRACKING
+// ============================================================
+
+let _sessionTrackingInterval = null;
+let _sessionWarningCountdownInterval = null;
+let _lastActivityTime = Date.now();
+let _sessionWarningShown = false;
+
+/** Update the last-activity timestamp on any user interaction */
+function _onUserActivity() {
+    _lastActivityTime = Date.now();
+    // If warning modal is showing, hide it and reset
+    if (_sessionWarningShown) {
+        _sessionWarningShown = false;
+        closeModal('sessionTimeoutModal');
+        if (_sessionWarningCountdownInterval) {
+            clearInterval(_sessionWarningCountdownInterval);
+            _sessionWarningCountdownInterval = null;
+        }
+    }
+}
+
+function startSessionTimeoutTracking() {
+    stopSessionTimeoutTracking(); // clear any existing
+
+    // Listen for user activity
+    ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll', 'click'].forEach(evt => {
+        document.addEventListener(evt, _onUserActivity, { passive: true });
+    });
+
+    // Check every 10 seconds
+    _sessionTrackingInterval = setInterval(() => {
+        if (!state.isAuthenticated || !state.currentUser) return;
+
+        const timeoutMs = (state.currentUser.session_timeout || 15) * 60 * 1000;
+        const warningMs = 60 * 1000; // warn 1 minute before expiry
+        const idleMs = Date.now() - _lastActivityTime;
+        const remainingMs = timeoutMs - idleMs;
+
+        if (remainingMs <= 0) {
+            // Timed out — auto logout
+            stopSessionTimeoutTracking();
+            closeModal('sessionTimeoutModal');
+            state.isAuthenticated = false;
+            state.currentUser = null;
+            document.body.classList.remove('read-only');
+            showLoginScreen();
+            // Show expired message
+            const errorDiv = document.getElementById('loginError');
+            if (errorDiv) {
+                errorDiv.textContent = 'Your session expired due to inactivity. Please log in again.';
+                errorDiv.style.display = 'block';
+            }
+            // Also call server logout
+            fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+        } else if (remainingMs <= warningMs && !_sessionWarningShown) {
+            // Show warning modal
+            _sessionWarningShown = true;
+            openModal('sessionTimeoutModal');
+            {
+                let secondsLeft = Math.ceil(remainingMs / 1000);
+                const countdownEl = document.getElementById('sessionTimeoutCountdown');
+                if (countdownEl) countdownEl.textContent = secondsLeft;
+
+                if (_sessionWarningCountdownInterval) clearInterval(_sessionWarningCountdownInterval);
+                _sessionWarningCountdownInterval = setInterval(() => {
+                    secondsLeft = Math.ceil(((state.currentUser ? (state.currentUser.session_timeout || 15) : 15) * 60 * 1000 - (Date.now() - _lastActivityTime)) / 1000);
+                    if (countdownEl) countdownEl.textContent = Math.max(0, secondsLeft);
+                    if (secondsLeft <= 0) {
+                        clearInterval(_sessionWarningCountdownInterval);
+                        _sessionWarningCountdownInterval = null;
+                    }
+                }, 1000);
+            }
+        }
+    }, 10000);
+}
+
+function stopSessionTimeoutTracking() {
+    if (_sessionTrackingInterval) {
+        clearInterval(_sessionTrackingInterval);
+        _sessionTrackingInterval = null;
+    }
+    if (_sessionWarningCountdownInterval) {
+        clearInterval(_sessionWarningCountdownInterval);
+        _sessionWarningCountdownInterval = null;
+    }
+    _sessionWarningShown = false;
+    ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll', 'click'].forEach(evt => {
+        document.removeEventListener(evt, _onUserActivity, { passive: true });
+    });
+    closeModal('sessionTimeoutModal');
+}
+
+/** Extend session — ping /api/users/me to refresh server last_activity */
+async function extendSession() {
+    try {
+        _lastActivityTime = Date.now();
+        _sessionWarningShown = false;
+        closeModal('sessionTimeoutModal');
+        if (_sessionWarningCountdownInterval) {
+            clearInterval(_sessionWarningCountdownInterval);
+            _sessionWarningCountdownInterval = null;
+        }
+        // GET /api/users/me goes through check_authentication which updates last_activity on the server
+        await apiFetch(`${API_URL}/users/me`, { credentials: 'include' });
+    } catch (e) {
+        // session already expired; apiFetch will redirect to login
+    }
+}
+
+// ============================================================
+// MY ACCOUNT SECTION
+// ============================================================
+
+function loadMyAccountSection() {
+    const input = document.getElementById('mySessionTimeout');
+    if (input && state.currentUser) {
+        input.value = state.currentUser.session_timeout || 15;
+    }
+}
+
+async function saveMySessionTimeout() {
+    const input = document.getElementById('mySessionTimeout');
+    const msgEl = document.getElementById('mySessionTimeoutMsg');
+    if (!input) return;
+
+    const timeout = parseInt(input.value);
+    if (isNaN(timeout) || timeout < 1 || timeout > 480) {
+        if (msgEl) { msgEl.textContent = 'Timeout must be between 1 and 480 minutes.'; msgEl.style.color = '#e74c3c'; msgEl.style.display = 'block'; }
+        return;
+    }
+
+    try {
+        const response = await apiFetch(`${API_URL}/auth/session-config`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ session_timeout: timeout })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            if (msgEl) { msgEl.textContent = err.error || 'Failed to save.'; msgEl.style.color = '#e74c3c'; msgEl.style.display = 'block'; }
+            return;
+        }
+
+        // Update local state and restart tracker
+        if (state.currentUser) {
+            state.currentUser.session_timeout = timeout;
+            startSessionTimeoutTracking();
+        }
+        if (msgEl) { msgEl.textContent = `Session timeout saved: ${timeout} minute${timeout !== 1 ? 's' : ''}.`; msgEl.style.color = '#27ae60'; msgEl.style.display = 'block'; }
+        setTimeout(() => { if (msgEl) msgEl.style.display = 'none'; }, 3000);
+    } catch (e) {
+        if (msgEl) { msgEl.textContent = 'Error saving timeout.'; msgEl.style.color = '#e74c3c'; msgEl.style.display = 'block'; }
+    }
+}
+
+// Wire up My Account & Session Warning buttons on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+    const saveMyBtn = document.getElementById('saveMySessionTimeoutBtn');
+    if (saveMyBtn) saveMyBtn.addEventListener('click', saveMySessionTimeout);
+
+    const extendBtn = document.getElementById('extendSessionBtn');
+    if (extendBtn) extendBtn.addEventListener('click', extendSession);
+});

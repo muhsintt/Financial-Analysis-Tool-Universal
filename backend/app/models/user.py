@@ -17,12 +17,16 @@ class User(db.Model):
     CALENDAR_BADI = 'badi'
     CALENDAR_CHOICES = [CALENDAR_BOTH, CALENDAR_GREGORIAN, CALENDAR_BADI]
     
+    # Default session timeout in minutes
+    DEFAULT_SESSION_TIMEOUT = 15
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='standard')  # 'superuser', 'standard', or 'viewer'
     is_default = db.Column(db.Boolean, default=False)  # True for the default admin user
     calendar_preference = db.Column(db.String(20), nullable=False, default='both')  # 'both', 'gregorian', or 'badi'
+    session_timeout = db.Column(db.Integer, nullable=False, default=15)  # Idle session timeout in minutes
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -60,6 +64,7 @@ class User(db.Model):
             'role': self.role,
             'is_default': self.is_default,
             'calendar_preference': self.calendar_preference or 'both',
+            'session_timeout': self.session_timeout if self.session_timeout is not None else self.DEFAULT_SESSION_TIMEOUT,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }

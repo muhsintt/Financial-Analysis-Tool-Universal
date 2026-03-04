@@ -69,6 +69,7 @@ def create_user():
     password = data.get('password', '')
     role = data.get('role', 'standard')
     calendar_preference = data.get('calendar_preference', 'both')
+    session_timeout = data.get('session_timeout', 15)
     
     if not username or not password:
         return jsonify({'error': 'Username and password are required'}), 400
@@ -84,6 +85,13 @@ def create_user():
     
     if calendar_preference not in User.CALENDAR_CHOICES:
         return jsonify({'error': 'Calendar preference must be both, gregorian, or badi'}), 400
+
+    try:
+        session_timeout = int(session_timeout)
+        if session_timeout < 1 or session_timeout > 480:
+            return jsonify({'error': 'Session timeout must be between 1 and 480 minutes'}), 400
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Session timeout must be an integer'}), 400
     
     # Check if username already exists
     if User.query.filter_by(username=username).first():
@@ -93,7 +101,8 @@ def create_user():
         username=username,
         role=role,
         is_default=False,
-        calendar_preference=calendar_preference
+        calendar_preference=calendar_preference,
+        session_timeout=session_timeout
     )
     user.set_password(password)
     
@@ -152,6 +161,15 @@ def update_user(id):
         if data['calendar_preference'] not in User.CALENDAR_CHOICES:
             return jsonify({'error': 'Calendar preference must be both, gregorian, or badi'}), 400
         user.calendar_preference = data['calendar_preference']
+
+    if 'session_timeout' in data:
+        try:
+            timeout = int(data['session_timeout'])
+            if timeout < 1 or timeout > 480:
+                return jsonify({'error': 'Session timeout must be between 1 and 480 minutes'}), 400
+            user.session_timeout = timeout
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Session timeout must be an integer'}), 400
     
     db.session.commit()
     
@@ -192,6 +210,15 @@ def delete_user(id):
     )
     
     return jsonify({'message': 'User deleted successfully'}), 200
+
+@users_bp.route('/me', methods=['GET'])
+@login_required
+def get_me():
+    """Get the currently logged-in user's own profile (also serves as a session ping)"""
+    user = User.query.get(session['user_id'])
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify(user.to_dict())
 
 @users_bp.route('/init', methods=['POST'])
 def init_default_admin():

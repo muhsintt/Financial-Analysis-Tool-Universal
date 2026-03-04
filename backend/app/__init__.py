@@ -3,7 +3,7 @@ import secrets
 from flask import Flask, render_template, send_from_directory, jsonify, request, session
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 db = SQLAlchemy()
 
@@ -92,10 +92,36 @@ def create_app():
                     'authenticated': False
                 }), 401
             
+            # Fetch user once for both timeout check and write permission check
+            from app.models.user import User
+            user = User.query.get(session['user_id'])
+            if not user:
+                session.clear()
+                return jsonify({'error': 'Authentication required', 'authenticated': False}), 401
+
+            # Check idle session timeout
+            last_activity = session.get('last_activity')
+            if last_activity:
+                try:
+                    last_dt = datetime.fromisoformat(last_activity)
+                    elapsed_minutes = (datetime.utcnow() - last_dt).total_seconds() / 60
+                    timeout = user.session_timeout if user.session_timeout is not None else User.DEFAULT_SESSION_TIMEOUT
+                    if elapsed_minutes > timeout:
+                        session.clear()
+                        return jsonify({
+                            'error': 'Session expired due to inactivity',
+                            'authenticated': False,
+                            'session_expired': True
+                        }), 401
+                except Exception:
+                    pass
+
+            # Update last activity timestamp
+            session['last_activity'] = datetime.utcnow().isoformat()
+            session.modified = True
+
             # Check if user can modify data (superuser only for write operations)
             if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
-                from app.models.user import User
-                user = User.query.get(session['user_id'])
                 if not user or not user.is_superuser():
                     return jsonify({
                         'error': 'Permission denied. Read-only access for standard users.',
