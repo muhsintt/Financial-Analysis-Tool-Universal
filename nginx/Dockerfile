@@ -15,7 +15,7 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN sed -i 's/\r$//' /docker-entrypoint.sh && \
     chmod +x /docker-entrypoint.sh
 
-# Expose ports
+# Expose ports (mapped externally to 8880:HTTP and 5443:HTTPS)
 EXPOSE 80 443
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

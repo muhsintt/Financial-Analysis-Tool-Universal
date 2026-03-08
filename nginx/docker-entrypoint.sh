@@ -34,8 +34,8 @@ if [ "$SSL_ENABLED" = "true" ]; then
     
     echo "============================================"
     echo "Starting NGINX with HTTPS..."
-    echo "  HTTP:  http://<your-ip>:80 (redirects to HTTPS)"
-    echo "  HTTPS: https://<your-ip>:443"
+    echo "  HTTP:  http://<your-ip>:8880 (redirects to HTTPS)"
+    echo "  HTTPS: https://<your-ip>:5443"
     echo "============================================"
     
     # Use SSL config
@@ -45,7 +45,7 @@ else
     echo "HTTP Mode (SSL disabled)"
     echo "============================================"
     echo "Starting NGINX with HTTP only..."
-    echo "  HTTP: http://<your-ip>:80"
+    echo "  HTTP: http://<your-ip>:8880"
     echo ""
     echo "To enable HTTPS, set SSL_ENABLED=true"
     echo "============================================"
