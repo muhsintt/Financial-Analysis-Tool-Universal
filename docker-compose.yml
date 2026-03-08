@@ -34,8 +34,8 @@ services:
       dockerfile: Dockerfile
     container_name: financial-analysis-nginx
     ports:
-      - "80:80"      # HTTP
-      - "443:443"    # HTTPS
+      - "5080:80"      # HTTP
+      - "5443:443"    # HTTPS
     volumes:
       # SSL certificates - mount your own or let it auto-generate
       - ./certs:/etc/nginx/ssl:rw
