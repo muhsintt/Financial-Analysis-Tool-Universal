@@ -1294,18 +1294,32 @@ input:checked + .slider:before {
 
 .bp-slider-header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     margin-bottom: 10px;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .bp-slider-header h4 {
     margin: 0;
 }
 
+.bp-slider-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .bp-slider-hint {
     font-size: 12px;
     color: #888;
+}
+
+.bp-consolidate-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    white-space: nowrap;
 }
 
 .bp-slider-container {
@@ -1316,15 +1330,59 @@ input:checked + .slider:before {
 
 .bp-slider-row {
     display: grid;
-    grid-template-columns: 30px 1fr 180px 90px;
+    grid-template-columns: 20px 26px 1fr 180px 90px;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     padding: 10px 0;
     border-bottom: 1px solid #f0f0f0;
 }
 
-.bp-slider-row:last-child {
+.bp-slider-row:last-child,
+.bp-group-row:last-child {
     border-bottom: none;
+}
+
+/* Checkbox used to select rows for consolidation */
+.bp-row-check {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--primary);
+    flex-shrink: 0;
+}
+
+/* Consolidated group row */
+.bp-group-row {
+    display: grid;
+    grid-template-columns: 26px 1fr 180px 90px;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding-left: 6px;
+    margin: 2px 0;
+}
+
+.bp-group-icon {
+    color: var(--primary);
+    font-size: 16px;
+    text-align: center;
+}
+
+.bp-group-name-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--dark);
+}
+
+.bp-group-members {
+    font-size: 11px;
+    color: #777;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .bp-cat-swatch {

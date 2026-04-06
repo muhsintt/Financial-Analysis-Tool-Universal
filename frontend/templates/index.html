@@ -361,7 +361,12 @@
                         </div>
                         
                         <div class="report-section">
-                            <h3>Category Breakdown</h3>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                                <h3 style="margin:0;">Category Breakdown</h3>
+                                <button class="btn btn-success btn-sm" id="reportsBudgetFromBreakdownBtn" style="display:none;" title="Create a budget plan using this category breakdown">
+                                    <i class="fas fa-clipboard-list"></i> Create Budget Plan
+                                </button>
+                            </div>
                             <div id="categoryBreakdown" class="category-table">
                                 <!-- Populated by JavaScript -->
                             </div>
@@ -450,6 +455,10 @@
                                     </button>
                                 </div>
                             </div>
+
+                            <button class="btn btn-success no-print" id="csBudgetFromSummaryBtn" style="display:none;" title="Create a budget plan using this period's expense breakdown">
+                                <i class="fas fa-clipboard-list"></i> Create Budget Plan
+                            </button>
                         </div>
                         
                         <!-- Print Header (only visible when printing) -->
@@ -1551,7 +1560,12 @@
             </div>
             <div class="bp-slider-header">
                 <h4>Category Allocations</h4>
-                <span class="bp-slider-hint">Drag sliders or type amounts directly</span>
+                <div class="bp-slider-header-actions">
+                    <span class="bp-slider-hint">Check categories then consolidate into one line</span>
+                    <button type="button" class="btn btn-secondary bp-consolidate-btn" id="bpConsolidateBtn" title="Merge checked categories into one consolidated budget line">
+                        <i class="fas fa-layer-group"></i> Consolidate Selected
+                    </button>
+                </div>
             </div>
             <div id="bpSliderContainer" class="bp-slider-container">
                 <!-- Populated by JS -->

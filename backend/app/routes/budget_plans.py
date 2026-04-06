@@ -6,6 +6,7 @@ from app.models.category import Category
 from app.routes.auth import write_required, login_required
 from datetime import date
 import calendar
+import json
 
 budget_plans_bp = Blueprint('budget_plans', __name__, url_prefix='/api/budget-plans')
 
@@ -145,9 +146,15 @@ def create_plan():
         cat_id = item.get('category_id')
         amount = float(item.get('amount', 0))
         actual = float(item.get('actual_amount', 0))
+        group_name = (item.get('group_name') or '').strip() or None
+        consolidated_ids = item.get('consolidated_category_ids')  # list or None
 
+        # For consolidated items, category_id must be the primary (first) category
         if not cat_id:
-            continue
+            if consolidated_ids and isinstance(consolidated_ids, list):
+                cat_id = consolidated_ids[0]
+            else:
+                continue
 
         # Verify category access
         cat = Category.query.filter(
@@ -157,9 +164,18 @@ def create_plan():
         if not cat:
             continue
 
+        # Serialize consolidated_ids to JSON string for storage
+        consolidated_json = (
+            json.dumps(consolidated_ids)
+            if consolidated_ids and isinstance(consolidated_ids, list)
+            else None
+        )
+
         plan_item = BudgetPlanItem(
             plan_id=plan.id,
             category_id=cat_id,
+            group_name=group_name,
+            consolidated_category_ids=consolidated_json,
             amount=amount,
             actual_amount=actual,
         )
@@ -195,34 +211,52 @@ def update_plan(plan_id):
 
     if 'items' in data:
         uid = _user_id()
-        incoming = {str(i.get('id', '')): i for i in data['items'] if i.get('category_id')}
 
-        # Update or add items
-        existing_by_cat = {str(item.category_id): item for item in plan.items}
+        # Build lookup maps for existing items
+        existing_by_id = {item.id: item for item in plan.items}
+        existing_by_cat = {item.category_id: item for item in plan.items}
+
+        # Track which existing item ids are touched
+        touched_ids = set()
 
         for item_data in data['items']:
             cat_id = item_data.get('category_id')
-            if not cat_id:
-                continue
-
             amount = float(item_data.get('amount', 0))
             actual = float(item_data.get('actual_amount', 0))
             item_id = item_data.get('id')
+            group_name = (item_data.get('group_name') or '').strip() or None
+            consolidated_ids = item_data.get('consolidated_category_ids')
 
-            if item_id:
-                # Update existing item by id
-                existing = next(
-                    (i for i in plan.items if i.id == item_id), None
-                )
-                if existing:
-                    existing.amount = amount
-                    existing.actual_amount = actual
-            elif str(cat_id) in existing_by_cat:
-                # Update by category match
-                existing_by_cat[str(cat_id)].amount = amount
-                existing_by_cat[str(cat_id)].actual_amount = actual
+            # For consolidated items, derive primary category_id
+            if not cat_id and consolidated_ids and isinstance(consolidated_ids, list):
+                cat_id = consolidated_ids[0]
+            if not cat_id:
+                continue
+
+            consolidated_json = (
+                json.dumps(consolidated_ids)
+                if consolidated_ids and isinstance(consolidated_ids, list)
+                else None
+            )
+
+            if item_id and item_id in existing_by_id:
+                # Update existing item by DB id
+                existing = existing_by_id[item_id]
+                existing.amount = amount
+                existing.actual_amount = actual
+                existing.group_name = group_name
+                existing.consolidated_category_ids = consolidated_json
+                touched_ids.add(item_id)
+            elif cat_id in existing_by_cat:
+                # Update by primary category match
+                existing = existing_by_cat[cat_id]
+                existing.amount = amount
+                existing.actual_amount = actual
+                existing.group_name = group_name
+                existing.consolidated_category_ids = consolidated_json
+                touched_ids.add(existing.id)
             else:
-                # New item
+                # New item — verify category access
                 cat = Category.query.filter(
                     Category.id == cat_id,
                     (Category.user_id == uid) | (Category.user_id.is_(None))
@@ -231,19 +265,18 @@ def update_plan(plan_id):
                     new_item = BudgetPlanItem(
                         plan_id=plan.id,
                         category_id=cat_id,
+                        group_name=group_name,
+                        consolidated_category_ids=consolidated_json,
                         amount=amount,
                         actual_amount=actual,
                     )
                     db.session.add(new_item)
+                    db.session.flush()
+                    touched_ids.add(new_item.id)
 
-        # Remove items whose category_ids are no longer in the payload
-        incoming_cat_ids = {
-            str(i.get('category_id'))
-            for i in data['items']
-            if i.get('category_id')
-        }
+        # Remove items that are no longer in the payload
         for item in list(plan.items):
-            if str(item.category_id) not in incoming_cat_ids:
+            if item.id not in touched_ids:
                 db.session.delete(item)
 
     db.session.flush()

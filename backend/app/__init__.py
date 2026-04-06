@@ -214,6 +214,26 @@ def _run_migrations(app):
                 conn.commit()
                 print("✓ Migration applied: added session_timeout column to users table")
 
+            # --- Migration: add group_name + consolidated_category_ids to budget_plan_items ---
+            result2 = conn.execute(text("PRAGMA table_info(budget_plan_items)"))
+            bp_cols_rows = result2.fetchall()
+            if bp_cols_rows:  # table exists
+                bp_cols = {row[1] for row in bp_cols_rows}
+                if 'group_name' not in bp_cols:
+                    conn.execute(text(
+                        "ALTER TABLE budget_plan_items ADD COLUMN group_name TEXT"
+                    ))
+                    conn.commit()
+                    print("✓ Migration applied: added group_name to budget_plan_items")
+                if 'consolidated_category_ids' not in bp_cols:
+                    conn.execute(text(
+                        "ALTER TABLE budget_plan_items"
+                        " ADD COLUMN consolidated_category_ids TEXT"
+                    ))
+                    conn.commit()
+                    print("✓ Migration applied: added consolidated_category_ids"
+                          " to budget_plan_items")
+
 
 def _initialize_default_rules():
     """Create default categorization rules if none exist"""

@@ -2816,10 +2816,24 @@ function displayBudgetAnalysis(data) {
 // Display Category Breakdown
 function displayCategoryBreakdown(data) {
     const container = document.getElementById('categoryBreakdown');
+    const budgetBtn = document.getElementById('reportsBudgetFromBreakdownBtn');
     if (!data.categories || data.categories.length === 0) {
         container.innerHTML = '<p>No expenses to display</p>';
+        _reportsCategories = [];
+        if (budgetBtn) budgetBtn.style.display = 'none';
         return;
     }
+
+    // Store for "Create Budget Plan" button
+    _reportsCategories = data.categories
+        .filter(c => c.category_id)
+        .map(c => ({
+            category_id: c.category_id,
+            category_name: c.category,
+            category_color: c.color || '#3498db',
+            actual_amount: c.amount,
+        }));
+    if (budgetBtn) budgetBtn.style.display = _reportsCategories.length ? '' : 'none';
 
     container.innerHTML = data.categories.map(c => `
         <div class="category-row">
@@ -2842,6 +2856,9 @@ const csState = {
     incomeChart: null,
     data: null
 };
+
+// Category data from the Reports page, used for "Create Budget Plan" shortcut
+let _reportsCategories = [];
 
 // Initialize Charts & Summaries page
 function initChartsSummaries() {
@@ -3107,16 +3124,13 @@ async function generateChartsSummaries() {
         if (transactions.length === 0) {
             alert(`No transactions found for ${dateRange.label}.\n\nTry selecting a different date range.`);
         } else {
-            // Show success notification with summary
-            const summaryMsg = `Report generated for ${dateRange.label}\n\n` +
-                `📊 Transactions: ${transactions.length}\n` +
-                `💰 Income: ${formatCurrency(totalIncome)}\n` +
-                `💸 Expenses: ${formatCurrency(totalExpenses)}\n` +
-                `📈 Net: ${formatCurrency(totalIncome - totalExpenses)}\n\n` +
-                `Click "Print Portrait" or "Print Landscape" to print this report.`;
-            
             // Show brief notification
             showCSNotification(`Report ready: ${transactions.length} transactions for ${dateRange.label}`);
+
+            // Show "Create Budget Plan" button if there are expense categories
+            const hasCsExpenses = Object.keys(expensesByCategory).length > 0;
+            const csBudgetBtn = document.getElementById('csBudgetFromSummaryBtn');
+            if (csBudgetBtn) csBudgetBtn.style.display = hasCsExpenses ? '' : 'none';
         }
         
         // Clear the form
@@ -4911,13 +4925,44 @@ function bpOpenEditorModal(planData, categories, sourceYear, sourceMonth) {
     // Build slider rows
     const container = document.getElementById('bpSliderContainer');
     if (!categories || !categories.length) {
-        container.innerHTML = '<p style="color:#888;padding:12px 0;">No expense categories found for this month.</p>';
+        container.innerHTML = '<p style="color:#888;padding:12px 0;">No expense categories found for this period.</p>';
         document.getElementById('bpTotalDisplay').textContent = _bpFormatCurrency(0);
         openModal('budgetPlanEditorModal');
         return;
     }
 
     container.innerHTML = categories.map((cat, idx) => {
+        if (cat.is_group) {
+            // ── Consolidated group row ─────────────────────────────────────
+            const actual = cat.actual_amount || 0;
+            const budgeted = cat.amount != null ? cat.amount : actual;
+            const sliderMax = _bpSliderMax(Math.max(actual, budgeted));
+            const consolidatedIds = JSON.stringify(cat.consolidated_category_ids || []);
+            const memberNames = (cat.category_names || []).join(' \u00b7 ');
+            return `
+        <div class="bp-group-row" data-row-idx="${idx}"
+             data-cat-id="${cat.category_id}"
+             data-group-name="${escapeHtml(cat.group_name)}"
+             data-consolidated-ids="${escapeHtml(consolidatedIds)}"
+             data-actual="${actual}">
+            <span class="bp-group-icon"><i class="fas fa-layer-group"></i></span>
+            <div>
+                <div class="bp-group-name-label">${escapeHtml(cat.group_name)}</div>
+                <div class="bp-group-members">${escapeHtml(memberNames)}</div>
+                <div class="bp-actual-label">Actual: ${_bpFormatCurrency(actual)}</div>
+            </div>
+            <input type="range" class="bp-slider-track" id="bpSlider_${idx}"
+                   min="0" max="${sliderMax}" step="1"
+                   value="${Math.round(budgeted)}"
+                   oninput="bpSyncSlider(${idx}, this.value)">
+            <input type="number" class="bp-amount-input" id="bpAmt_${idx}"
+                   min="0" max="${sliderMax}" step="0.01"
+                   value="${budgeted.toFixed(2)}"
+                   oninput="bpSyncInput(${idx}, this.value)">
+        </div>`;
+        }
+
+        // ── Regular category row ───────────────────────────────────────────
         const actual = cat.actual_amount || 0;
         const budgeted = planData
             ? (planData.items.find(i => i.category_id === cat.category_id)?.amount ?? actual)
@@ -4925,7 +4970,8 @@ function bpOpenEditorModal(planData, categories, sourceYear, sourceMonth) {
         const sliderMax = _bpSliderMax(Math.max(actual, budgeted));
         const color = cat.category_color || '#3498db';
         return `
-        <div class="bp-slider-row" data-cat-id="${cat.category_id}" data-actual="${actual}">
+        <div class="bp-slider-row" data-row-idx="${idx}" data-cat-id="${cat.category_id}" data-actual="${actual}">
+            <input type="checkbox" class="bp-row-check" title="Select to consolidate">
             <span class="bp-cat-swatch" style="background:${color};"></span>
             <div>
                 <div class="bp-cat-name" title="${escapeHtml(cat.category_name)}">${escapeHtml(cat.category_name)}</div>
@@ -4965,8 +5011,8 @@ function bpSyncInput(idx, rawValue) {
 
 function bpUpdateTotal() {
     let total = 0;
-    document.querySelectorAll('#bpSliderContainer .bp-slider-row').forEach(row => {
-        const idx = row.querySelector('.bp-slider-track').id.replace('bpSlider_', '');
+    document.querySelectorAll('#bpSliderContainer [data-row-idx]').forEach(row => {
+        const idx = row.dataset.rowIdx;
         total += parseFloat(document.getElementById(`bpAmt_${idx}`).value) || 0;
     });
     document.getElementById('bpTotalDisplay').textContent = _bpFormatCurrency(total);
@@ -4980,13 +5026,26 @@ async function bpOpenEditor(planId) {
         if (!resp.ok) throw new Error('Failed to load plan');
         const plan = await resp.json();
 
-        // Build categories list from the plan's items
-        const categories = plan.items.map(item => ({
-            category_id: item.category_id,
-            category_name: item.category_name,
-            category_color: item.category_color,
-            actual_amount: item.actual_amount,
-        }));
+        // Build categories list from the plan's items (handles both regular & consolidated)
+        const categories = plan.items.map(item => {
+            if (item.group_name) {
+                return {
+                    is_group: true,
+                    group_name: item.group_name,
+                    consolidated_category_ids: item.consolidated_category_ids || [],
+                    category_names: item.category_names || [],
+                    category_id: item.category_id,
+                    actual_amount: item.actual_amount,
+                    amount: item.amount,
+                };
+            }
+            return {
+                category_id: item.category_id,
+                category_name: item.category_name,
+                category_color: item.category_color,
+                actual_amount: item.actual_amount,
+            };
+        });
 
         bpState.sourceYear = plan.source_year;
         bpState.sourceMonth = plan.source_month;
@@ -5002,16 +5061,33 @@ async function bpSavePlan() {
     const name = document.getElementById('bpPlanName').value.trim();
     if (!name) { alert('Please enter a plan name.'); return; }
 
-    // Collect items
+    // Collect items — handle both regular rows (.bp-slider-row) and group rows (.bp-group-row)
     const items = [];
     let newTotal = 0;
-    document.querySelectorAll('#bpSliderContainer .bp-slider-row').forEach(row => {
-        const catId = parseInt(row.dataset.catId);
+    document.querySelectorAll('#bpSliderContainer [data-row-idx]').forEach(row => {
+        const idx = row.dataset.rowIdx;
         const actual = parseFloat(row.dataset.actual) || 0;
-        const idx = row.querySelector('.bp-slider-track').id.replace('bpSlider_', '');
         const amount = parseFloat(document.getElementById(`bpAmt_${idx}`).value) || 0;
         newTotal += amount;
-        items.push({ category_id: catId, amount, actual_amount: actual });
+
+        if (row.classList.contains('bp-group-row')) {
+            // Consolidated group row
+            const groupName = row.dataset.groupName || '';
+            let consolidatedIds = [];
+            try { consolidatedIds = JSON.parse(row.dataset.consolidatedIds || '[]'); } catch (_) {}
+            const catId = parseInt(row.dataset.catId) || (consolidatedIds[0] || null);
+            items.push({
+                category_id: catId,
+                group_name: groupName,
+                consolidated_category_ids: consolidatedIds,
+                amount,
+                actual_amount: actual,
+            });
+        } else {
+            // Regular slider row
+            const catId = parseInt(row.dataset.catId);
+            items.push({ category_id: catId, amount, actual_amount: actual });
+        }
     });
 
     // Existing plan: confirm if total increases
@@ -5090,6 +5166,133 @@ async function bpDeletePlan(planId, planName) {
     }
 }
 
+// ─── Consolidate Selected Categories ─────────────────────────────────────
+
+function bpConsolidateSelected() {
+    const checkedRows = Array.from(
+        document.querySelectorAll('#bpSliderContainer .bp-slider-row .bp-row-check:checked')
+    ).map(cb => cb.closest('.bp-slider-row'));
+
+    if (checkedRows.length < 2) {
+        alert('Please check at least 2 category rows to consolidate.');
+        return;
+    }
+
+    const groupName = prompt(
+        `Consolidating ${checkedRows.length} categories.\n\nEnter a name for this consolidated budget line:`
+    );
+    if (!groupName || !groupName.trim()) return;
+    const trimmedName = groupName.trim();
+
+    // Sum up actual and budgeted amounts from all selected rows
+    let sumActual = 0;
+    let sumBudgeted = 0;
+    const consolidatedIds = [];
+    const categoryNames = [];
+
+    checkedRows.forEach(row => {
+        const idx = row.dataset.rowIdx;
+        sumActual += parseFloat(row.dataset.actual) || 0;
+        sumBudgeted += parseFloat(document.getElementById(`bpAmt_${idx}`).value) || 0;
+        consolidatedIds.push(parseInt(row.dataset.catId));
+        const nameEl = row.querySelector('.bp-cat-name');
+        if (nameEl) categoryNames.push(nameEl.textContent.trim());
+    });
+
+    // Determine the next row index (highest existing + 1)
+    const allRows = document.querySelectorAll('#bpSliderContainer [data-row-idx]');
+    const maxIdx = Math.max(...Array.from(allRows).map(r => parseInt(r.dataset.rowIdx)));
+    const newIdx = maxIdx + 1;
+
+    const sliderMax = _bpSliderMax(Math.max(sumActual, sumBudgeted));
+    const memberDisplay = categoryNames.join(' \u00b7 ');
+
+    // Build the consolidated group row HTML
+    const groupRowHtml = `
+        <div class="bp-group-row" data-row-idx="${newIdx}"
+             data-cat-id="${consolidatedIds[0]}"
+             data-group-name="${escapeHtml(trimmedName)}"
+             data-consolidated-ids="${escapeHtml(JSON.stringify(consolidatedIds))}"
+             data-actual="${sumActual.toFixed(2)}">
+            <span class="bp-group-icon"><i class="fas fa-layer-group"></i></span>
+            <div>
+                <div class="bp-group-name-label">${escapeHtml(trimmedName)}</div>
+                <div class="bp-group-members">${escapeHtml(memberDisplay)}</div>
+                <div class="bp-actual-label">Actual: ${_bpFormatCurrency(sumActual)}</div>
+            </div>
+            <input type="range" class="bp-slider-track" id="bpSlider_${newIdx}"
+                   min="0" max="${sliderMax}" step="1"
+                   value="${Math.round(sumBudgeted)}"
+                   oninput="bpSyncSlider(${newIdx}, this.value)">
+            <input type="number" class="bp-amount-input" id="bpAmt_${newIdx}"
+                   min="0" max="${sliderMax}" step="0.01"
+                   value="${sumBudgeted.toFixed(2)}"
+                   oninput="bpSyncInput(${newIdx}, this.value)">
+        </div>`;
+
+    // Remove the individually-checked rows and insert the group row in their place
+    const container = document.getElementById('bpSliderContainer');
+    const firstRow = checkedRows[0];
+    firstRow.insertAdjacentHTML('beforebegin', groupRowHtml);
+    checkedRows.forEach(r => r.remove());
+
+    bpUpdateTotal();
+}
+
+// ─── Create Budget Plan from Charts & Summaries ───────────────────────────
+
+function bpCreateFromSummary() {
+    const transactions = csState.data && csState.data.transactions;
+    if (!transactions || !transactions.length) {
+        alert('No data loaded. Please generate a report first.');
+        return;
+    }
+
+    // Aggregate expenses by category_id
+    const catMap = {};
+    transactions.forEach(t => {
+        if (t.type !== 'expense' || !t.category_id) return;
+        if (!catMap[t.category_id]) {
+            catMap[t.category_id] = {
+                category_id: t.category_id,
+                category_name: t.category_name || t.category || 'Uncategorized',
+                category_color: t.category_color || '#3498db',
+                actual_amount: 0,
+            };
+        }
+        catMap[t.category_id].actual_amount += t.amount;
+    });
+
+    const categories = Object.values(catMap)
+        .sort((a, b) => b.actual_amount - a.actual_amount);
+
+    if (!categories.length) {
+        alert('No expense categories found in the current report period.');
+        return;
+    }
+
+    bpState.sourceYear = null;
+    bpState.sourceMonth = null;
+    bpState.net = null;
+    bpState.editingPlanId = null;
+    bpOpenEditorModal(null, categories, null, null);
+}
+
+// ─── Create Budget Plan from Reports Category Breakdown ───────────────────
+
+function bpCreateFromReports() {
+    if (!_reportsCategories.length) {
+        alert('No category data available. Please load a report first.');
+        return;
+    }
+
+    bpState.sourceYear = null;
+    bpState.sourceMonth = null;
+    bpState.net = null;
+    bpState.editingPlanId = null;
+    bpOpenEditorModal(null, _reportsCategories, null, null);
+}
+
 // ─── Init event listeners (called once from initializeEventListeners) ─────
 
 function initBudgetPlanListeners() {
@@ -5104,6 +5307,15 @@ function initBudgetPlanListeners() {
 
     const saveBtn = document.getElementById('bpSavePlanBtn');
     if (saveBtn) saveBtn.addEventListener('click', bpSavePlan);
+
+    const consolidateBtn = document.getElementById('bpConsolidateBtn');
+    if (consolidateBtn) consolidateBtn.addEventListener('click', bpConsolidateSelected);
+
+    const csBudgetBtn = document.getElementById('csBudgetFromSummaryBtn');
+    if (csBudgetBtn) csBudgetBtn.addEventListener('click', bpCreateFromSummary);
+
+    const reportsBudgetBtn = document.getElementById('reportsBudgetFromBreakdownBtn');
+    if (reportsBudgetBtn) reportsBudgetBtn.addEventListener('click', bpCreateFromReports);
 }
 
 // ========================
