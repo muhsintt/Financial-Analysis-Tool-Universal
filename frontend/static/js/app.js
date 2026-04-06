@@ -1142,6 +1142,9 @@ function initializeEventListeners() {
     // Initialize Clear Transactions functionality
     initializeClearTransactions();
 
+    // Initialize Budget Plans listeners
+    initBudgetPlanListeners();
+
     // Initialize Upload History listeners
     initializeUploadHistoryListeners();
 
@@ -1268,6 +1271,7 @@ function navigateTo(page) {
         'reports': 'Reports',
         'rules': 'Categorization Rules',
         'charts-summaries': 'Charts & Summaries',
+        'budget-plans': 'Budget Plans',
         'upload': 'Upload Bank Statement',
         'bank-templates': 'Bank Templates',
         'settings': 'Settings'
@@ -1303,6 +1307,9 @@ function navigateTo(page) {
             break;
         case 'rules':
             loadRules();
+            break;
+        case 'budget-plans':
+            loadBudgetPlans();
             break;
         case 'reports':
             loadReports();
@@ -4725,6 +4732,378 @@ async function handleApiToggle(event) {
             </div>
         `;
     }
+}
+
+// ==========================================
+// Budget Plans
+// ==========================================
+
+// Internal state for the budget plan editor
+const bpState = {
+    sourceYear: null,
+    sourceMonth: null,
+    sourceCategories: [],   // [{category_id, category_name, category_color, actual_amount}]
+    net: null,
+    editingPlanId: null,    // null = new plan, number = editing existing
+    originalTotal: 0,       // total before any edits (used for increase-confirmation)
+};
+
+// helpers
+function _bpSliderMax(actualAmount) {
+    // slider max = 3× the actual spend, minimum $500
+    return Math.max(Math.ceil((actualAmount * 3) / 10) * 10, 500);
+}
+
+function _bpFormatCurrency(n) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
+}
+
+function _bpMonthLabel(year, month) {
+    if (!year || !month) return '';
+    const d = new Date(year, month - 1, 1);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+}
+
+// ─── Load Plans List ───────────────────────────────────────────────────────
+
+async function loadBudgetPlans() {
+    if (state.currentPage !== 'budget-plans') return;
+    try {
+        const resp = await apiFetch(`${API_URL}/budget-plans/`);
+        if (!resp.ok) throw new Error('Failed to load budget plans');
+        const plans = await resp.json();
+        renderBudgetPlansList(plans);
+    } catch (err) {
+        console.error(err);
+        document.getElementById('budgetPlansContainer').innerHTML =
+            `<p style="color:red">Error loading budget plans: ${err.message}</p>`;
+    }
+}
+
+function renderBudgetPlansList(plans) {
+    const container = document.getElementById('budgetPlansContainer');
+    if (!plans.length) {
+        container.innerHTML = `
+            <div style="text-align:center;padding:40px;color:#888;">
+                <i class="fas fa-clipboard-list" style="font-size:40px;margin-bottom:12px;display:block;"></i>
+                <p>No budget plans yet. Click <strong>New Budget Plan</strong> to create one.</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = plans.map(plan => `
+        <div class="bp-plan-card" data-plan-id="${plan.id}">
+            <div class="bp-plan-header">
+                <span class="bp-plan-title">${escapeHtml(plan.name)}</span>
+            </div>
+            <div class="bp-plan-meta">
+                ${plan.source_year && plan.source_month
+                    ? `Based on ${_bpMonthLabel(plan.source_year, plan.source_month)} &nbsp;·&nbsp; `
+                    : ''}
+                Created ${new Date(plan.created_at).toLocaleDateString()}
+            </div>
+            <div class="bp-plan-total">${_bpFormatCurrency(plan.total_amount)} total budget</div>
+            <div class="bp-plan-actions">
+                <button class="btn btn-secondary" onclick="bpOpenEditor(${plan.id})">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+                <button class="btn btn-danger" onclick="bpDeletePlan(${plan.id}, '${escapeHtml(plan.name)}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ─── Step 1: Month Picker ─────────────────────────────────────────────────
+
+function bpOpenMonthPicker() {
+    // Reset state
+    bpState.sourceYear = null;
+    bpState.sourceMonth = null;
+    bpState.sourceCategories = [];
+    bpState.net = null;
+    bpState.editingPlanId = null;
+
+    // Set default to current month
+    const today = new Date();
+    document.getElementById('bpSourceMonth').value =
+        `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+    document.getElementById('bpMonthSummary').style.display = 'none';
+    document.getElementById('bpProceedBtn').style.display = 'none';
+    openModal('budgetPlanMonthModal');
+}
+
+async function bpLoadMonth() {
+    const val = document.getElementById('bpSourceMonth').value;
+    if (!val) { alert('Please select a month'); return; }
+    const [year, month] = val.split('-').map(Number);
+
+    const btn = document.getElementById('bpLoadMonthBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading…';
+
+    try {
+        const resp = await apiFetch(`${API_URL}/budget-plans/month-summary?year=${year}&month=${month}`);
+        if (!resp.ok) {
+            const e = await resp.json();
+            throw new Error(e.error || 'Failed to load month data');
+        }
+        const data = await resp.json();
+
+        bpState.sourceYear = year;
+        bpState.sourceMonth = month;
+        bpState.sourceCategories = data.categories;
+        bpState.net = data.net;
+
+        // Render summary
+        const summaryEl = document.getElementById('bpMonthSummary');
+        const negativeWarning = data.net < 0
+            ? `<div class="bp-warning"><i class="fas fa-exclamation-triangle"></i>
+               This month has a <strong>negative balance (${_bpFormatCurrency(data.net)})</strong>.
+               It is not ideal as a budget baseline. You may still proceed.</div>`
+            : '';
+        summaryEl.innerHTML = `
+            ${negativeWarning}
+            <strong>${_bpMonthLabel(year, month)}</strong><br>
+            Income: ${_bpFormatCurrency(data.income)} &nbsp;|&nbsp;
+            Expenses: ${_bpFormatCurrency(data.expense)} &nbsp;|&nbsp;
+            <span style="color:${data.net >= 0 ? 'var(--success)' : 'var(--danger)'}">
+                Net: ${_bpFormatCurrency(data.net)}
+            </span><br>
+            <span style="color:#888;font-size:12px;">${data.categories.length} spending categor${data.categories.length === 1 ? 'y' : 'ies'} found</span>
+        `;
+        summaryEl.style.display = 'block';
+        document.getElementById('bpProceedBtn').style.display = '';
+    } catch (err) {
+        alert('Error loading month: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-search"></i> Load Month';
+    }
+}
+
+function bpProceedToEditor() {
+    if (bpState.net !== null && bpState.net < 0) {
+        const ok = confirm(
+            `Warning: ${_bpMonthLabel(bpState.sourceYear, bpState.sourceMonth)} has a negative ` +
+            `balance of ${_bpFormatCurrency(bpState.net)}.\n\n` +
+            `This month is not ideal for budgeting. Do you still want to use it as your baseline?`
+        );
+        if (!ok) return;
+    }
+    closeModal('budgetPlanMonthModal');
+    bpOpenEditorModal(null, bpState.sourceCategories, bpState.sourceYear, bpState.sourceMonth);
+}
+
+// ─── Step 2: Editor Modal ─────────────────────────────────────────────────
+
+function bpOpenEditorModal(planData, categories, sourceYear, sourceMonth) {
+    // planData = null for new plan, existing plan object for edit
+    bpState.editingPlanId = planData ? planData.id : null;
+    bpState.originalTotal = planData ? planData.total_amount : 0;
+
+    document.getElementById('bpEditorTitle').textContent =
+        planData ? `Edit Plan: ${planData.name}` : 'New Budget Plan';
+    document.getElementById('bpPlanName').value = planData ? planData.name : '';
+
+    // Build slider rows
+    const container = document.getElementById('bpSliderContainer');
+    if (!categories || !categories.length) {
+        container.innerHTML = '<p style="color:#888;padding:12px 0;">No expense categories found for this month.</p>';
+        document.getElementById('bpTotalDisplay').textContent = _bpFormatCurrency(0);
+        openModal('budgetPlanEditorModal');
+        return;
+    }
+
+    container.innerHTML = categories.map((cat, idx) => {
+        const actual = cat.actual_amount || 0;
+        const budgeted = planData
+            ? (planData.items.find(i => i.category_id === cat.category_id)?.amount ?? actual)
+            : actual;
+        const sliderMax = _bpSliderMax(Math.max(actual, budgeted));
+        const color = cat.category_color || '#3498db';
+        return `
+        <div class="bp-slider-row" data-cat-id="${cat.category_id}" data-actual="${actual}">
+            <span class="bp-cat-swatch" style="background:${color};"></span>
+            <div>
+                <div class="bp-cat-name" title="${escapeHtml(cat.category_name)}">${escapeHtml(cat.category_name)}</div>
+                <div class="bp-actual-label">Actual: ${_bpFormatCurrency(actual)}</div>
+            </div>
+            <input type="range" class="bp-slider-track" id="bpSlider_${idx}"
+                   min="0" max="${sliderMax}" step="1"
+                   value="${Math.round(budgeted)}"
+                   oninput="bpSyncSlider(${idx}, this.value)">
+            <input type="number" class="bp-amount-input" id="bpAmt_${idx}"
+                   min="0" max="${sliderMax}" step="0.01"
+                   value="${budgeted.toFixed(2)}"
+                   oninput="bpSyncInput(${idx}, this.value)">
+        </div>`;
+    }).join('');
+
+    bpUpdateTotal();
+    openModal('budgetPlanEditorModal');
+}
+
+function bpSyncSlider(idx, rawValue) {
+    const val = parseFloat(rawValue) || 0;
+    document.getElementById(`bpAmt_${idx}`).value = val.toFixed(2);
+    bpUpdateTotal();
+}
+
+function bpSyncInput(idx, rawValue) {
+    const val = parseFloat(rawValue) || 0;
+    const slider = document.getElementById(`bpSlider_${idx}`);
+    // Extend max if user types higher value
+    if (val > parseFloat(slider.max)) {
+        slider.max = Math.ceil(val * 1.5 / 10) * 10;
+    }
+    slider.value = Math.round(val);
+    bpUpdateTotal();
+}
+
+function bpUpdateTotal() {
+    let total = 0;
+    document.querySelectorAll('#bpSliderContainer .bp-slider-row').forEach(row => {
+        const idx = row.querySelector('.bp-slider-track').id.replace('bpSlider_', '');
+        total += parseFloat(document.getElementById(`bpAmt_${idx}`).value) || 0;
+    });
+    document.getElementById('bpTotalDisplay').textContent = _bpFormatCurrency(total);
+}
+
+// ─── Open editor for existing plan ────────────────────────────────────────
+
+async function bpOpenEditor(planId) {
+    try {
+        const resp = await apiFetch(`${API_URL}/budget-plans/${planId}`);
+        if (!resp.ok) throw new Error('Failed to load plan');
+        const plan = await resp.json();
+
+        // Build categories list from the plan's items
+        const categories = plan.items.map(item => ({
+            category_id: item.category_id,
+            category_name: item.category_name,
+            category_color: item.category_color,
+            actual_amount: item.actual_amount,
+        }));
+
+        bpState.sourceYear = plan.source_year;
+        bpState.sourceMonth = plan.source_month;
+        bpOpenEditorModal(plan, categories, plan.source_year, plan.source_month);
+    } catch (err) {
+        alert('Error loading plan: ' + err.message);
+    }
+}
+
+// ─── Save Plan ────────────────────────────────────────────────────────────
+
+async function bpSavePlan() {
+    const name = document.getElementById('bpPlanName').value.trim();
+    if (!name) { alert('Please enter a plan name.'); return; }
+
+    // Collect items
+    const items = [];
+    let newTotal = 0;
+    document.querySelectorAll('#bpSliderContainer .bp-slider-row').forEach(row => {
+        const catId = parseInt(row.dataset.catId);
+        const actual = parseFloat(row.dataset.actual) || 0;
+        const idx = row.querySelector('.bp-slider-track').id.replace('bpSlider_', '');
+        const amount = parseFloat(document.getElementById(`bpAmt_${idx}`).value) || 0;
+        newTotal += amount;
+        items.push({ category_id: catId, amount, actual_amount: actual });
+    });
+
+    // Existing plan: confirm if total increases
+    if (bpState.editingPlanId && newTotal > bpState.originalTotal) {
+        const diff = newTotal - bpState.originalTotal;
+        const ok = confirm(
+            `You are increasing the total budget by ${_bpFormatCurrency(diff)} ` +
+            `(from ${_bpFormatCurrency(bpState.originalTotal)} to ${_bpFormatCurrency(newTotal)}).\n\n` +
+            `Do you want to confirm this increase?`
+        );
+        if (!ok) return;
+    }
+
+    const payload = {
+        name,
+        source_year: bpState.sourceYear,
+        source_month: bpState.sourceMonth,
+        items,
+    };
+
+    const btn = document.getElementById('bpSavePlanBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+    try {
+        let resp;
+        if (bpState.editingPlanId) {
+            resp = await apiFetch(`${API_URL}/budget-plans/${bpState.editingPlanId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        } else {
+            resp = await apiFetch(`${API_URL}/budget-plans/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        }
+
+        if (!resp.ok) {
+            const e = await resp.json();
+            throw new Error(e.error || 'Failed to save plan');
+        }
+
+        closeModal('budgetPlanEditorModal');
+        showNotification(
+            bpState.editingPlanId ? 'Budget plan updated!' : 'Budget plan created!',
+            'success'
+        );
+        loadBudgetPlans();
+    } catch (err) {
+        alert('Error saving plan: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Save Plan';
+    }
+}
+
+// ─── Delete Plan ──────────────────────────────────────────────────────────
+
+async function bpDeletePlan(planId, planName) {
+    if (!confirm(`Are you sure you want to permanently delete the budget plan "${planName}"?\n\nThis cannot be undone.`)) {
+        return;
+    }
+    try {
+        const resp = await apiFetch(`${API_URL}/budget-plans/${planId}`, { method: 'DELETE' });
+        if (!resp.ok) {
+            const e = await resp.json();
+            throw new Error(e.error || 'Failed to delete plan');
+        }
+        showNotification('Budget plan deleted', 'success');
+        loadBudgetPlans();
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+// ─── Init event listeners (called once from initializeEventListeners) ─────
+
+function initBudgetPlanListeners() {
+    const createBtn = document.getElementById('createBudgetPlanBtn');
+    if (createBtn) createBtn.addEventListener('click', bpOpenMonthPicker);
+
+    const loadBtn = document.getElementById('bpLoadMonthBtn');
+    if (loadBtn) loadBtn.addEventListener('click', bpLoadMonth);
+
+    const proceedBtn = document.getElementById('bpProceedBtn');
+    if (proceedBtn) proceedBtn.addEventListener('click', bpProceedToEditor);
+
+    const saveBtn = document.getElementById('bpSavePlanBtn');
+    if (saveBtn) saveBtn.addEventListener('click', bpSavePlan);
 }
 
 // ========================

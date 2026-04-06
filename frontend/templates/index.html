@@ -65,7 +65,15 @@
                             <li><a href="#rules" class="nav-link sub-link" data-page="rules"><i class="fas fa-filter"></i> Categorization Rules</a></li>
                         </ul>
                     </li>
-                    <li><a href="#budgets" class="nav-link" data-page="budgets"><i class="fas fa-piggy-bank"></i> Budgets</a></li>
+                    <li class="has-submenu">
+                        <a href="#budgets" class="nav-link" data-page="budgets">
+                            <i class="fas fa-piggy-bank"></i> Budgets
+                            <i class="fas fa-chevron-down submenu-arrow"></i>
+                        </a>
+                        <ul class="submenu">
+                            <li><a href="#budget-plans" class="nav-link sub-link" data-page="budget-plans"><i class="fas fa-clipboard-list"></i> Budget Plans</a></li>
+                        </ul>
+                    </li>
                     <li class="has-submenu">
                         <a href="#reports" class="nav-link" data-page="reports">
                             <i class="fas fa-chart-bar"></i> Reports
@@ -319,6 +327,20 @@
                     </div>
                     
                     <div class="budgets-grid" id="budgetsGrid">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Budget Plans Page -->
+                <div id="budget-plans" class="page">
+                    <div class="page-header">
+                        <button class="btn btn-primary" id="createBudgetPlanBtn">
+                            <i class="fas fa-plus"></i> New Budget Plan
+                        </button>
+                    </div>
+
+                    <!-- Saved plans list -->
+                    <div id="budgetPlansContainer">
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
@@ -1498,11 +1520,54 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Budget Plan: Step 1 — Pick a source month -->
+    <div id="budgetPlanMonthModal" class="modal">
+        <div class="modal-content" style="max-width:480px;">
+            <span class="close" onclick="closeModal('budgetPlanMonthModal')">&times;</span>
+            <h2>Create Budget Plan</h2>
+            <p style="color:#666;margin-bottom:16px;">Choose a source month whose spending data pre-fills your new plan.</p>
+            <div class="form-group">
+                <label>Source Month</label>
+                <input type="month" id="bpSourceMonth" class="form-control">
+            </div>
+            <div id="bpMonthSummary" style="display:none;margin-bottom:12px;padding:12px;border-radius:8px;background:#f8f9fa;font-size:14px;"></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" id="bpLoadMonthBtn"><i class="fas fa-search"></i> Load Month</button>
+                <button type="button" class="btn btn-primary" id="bpProceedBtn" style="display:none;"><i class="fas fa-arrow-right"></i> Continue &amp; Name Plan</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal('budgetPlanMonthModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Budget Plan: Step 2 — Name + Sliders (create or edit) -->
+    <div id="budgetPlanEditorModal" class="modal">
+        <div class="modal-content bp-editor-modal">
+            <span class="close" onclick="closeModal('budgetPlanEditorModal')">&times;</span>
+            <h2 id="bpEditorTitle">New Budget Plan</h2>
+            <div class="form-group">
+                <label>Plan Name</label>
+                <input type="text" id="bpPlanName" class="form-control" placeholder="e.g., Monthly Household Budget" maxlength="150">
+            </div>
+            <div class="bp-slider-header">
+                <h4>Category Allocations</h4>
+                <span class="bp-slider-hint">Drag sliders or type amounts directly</span>
+            </div>
+            <div id="bpSliderContainer" class="bp-slider-container">
+                <!-- Populated by JS -->
+            </div>
+            <div class="bp-total-row">
+                <span>Total Budget:</span>
+                <span id="bpTotalDisplay" class="bp-total-value">$0.00</span>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary" id="bpSavePlanBtn"><i class="fas fa-save"></i> Save Plan</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal('budgetPlanEditorModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="budgetModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Create Budget</h2>
             <form id="budgetForm">
                 <div class="form-group">
                     <label>Category</label>

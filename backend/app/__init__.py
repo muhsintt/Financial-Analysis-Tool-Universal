@@ -50,6 +50,7 @@ def create_app():
     # Register blueprints
     from app.routes.transactions import transactions_bp
     from app.routes.budgets import budgets_bp
+    from app.routes.budget_plans import budget_plans_bp
     from app.routes.reports import reports_bp
     from app.routes.uploads import uploads_bp
     from app.routes.categories import categories_bp
@@ -63,6 +64,7 @@ def create_app():
     
     app.register_blueprint(transactions_bp)
     app.register_blueprint(budgets_bp)
+    app.register_blueprint(budget_plans_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(uploads_bp)
     app.register_blueprint(categories_bp)
