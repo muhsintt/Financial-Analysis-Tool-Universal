@@ -245,6 +245,7 @@ def delete_rule(id):
     return jsonify({'message': 'Rule deleted successfully'}), 200
 
 @rules_bp.route('/test', methods=['POST'])
+@login_required
 def test_rule():
     """Test a rule against a description"""
     data = request.get_json()

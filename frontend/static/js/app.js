@@ -4214,7 +4214,7 @@ function displayRules(rules) {
             </td>
             <td>
                 <div class="actions">
-                    <button class="btn-icon edit" title="Edit" onclick="editRule(${r.id})">
+                    <button class="btn-icon edit" title="Edit" onclick="editRule(${r.id})" style="${isSuperuser ? '' : 'display:none'}">
                         <i class="fas fa-edit"></i>
                     </button>
                     <button class="btn-icon delete" title="Delete" onclick="deleteRule(${r.id})" style="${isSuperuser ? '' : 'display:none'}">

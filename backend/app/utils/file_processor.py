@@ -28,17 +28,23 @@ def categorize_transaction(description, category_id=None, user_id=None):
         if category:
             return category_id
     
-    # Check categorization rules in priority order (filter by user if provided)
+    # Check categorization rules in priority order.
+    # Personal rules (user_id=user_id) take precedence over system rules (user_id=None).
     if user_id:
-        rules = CategorizationRule.query.filter_by(
-            is_active=True, 
+        personal_rules = CategorizationRule.query.filter_by(
+            is_active=True,
             user_id=user_id
         ).order_by(CategorizationRule.priority.desc()).all()
+        system_rules = CategorizationRule.query.filter(
+            CategorizationRule.is_active == True,
+            CategorizationRule.user_id.is_(None)
+        ).order_by(CategorizationRule.priority.desc()).all()
+        rules = personal_rules + system_rules
     else:
         rules = CategorizationRule.query.filter_by(is_active=True).order_by(
             CategorizationRule.priority.desc()
         ).all()
-    
+
     for rule in rules:
         if rule.matches(description):
             return rule.category_id
@@ -63,15 +69,20 @@ def categorize_transaction(description, category_id=None, user_id=None):
     for category_name, keywords in category_map.items():
         if any(word in description_lower for word in keywords):
             if user_id:
+                # Try user-specific category first, then fall back to system category
                 category = Category.query.filter_by(name=category_name, user_id=user_id).first()
+                if not category:
+                    category = Category.query.filter_by(name=category_name, user_id=None).first()
             else:
                 category = Category.query.filter_by(name=category_name).first()
             if category:
                 return category.id
-    
+
     # Default to 'Uncategorized'
     if user_id:
         default_category = Category.query.filter_by(name='Uncategorized', user_id=user_id).first()
+        if not default_category:
+            default_category = Category.query.filter_by(name='Uncategorized', user_id=None).first()
     else:
         default_category = Category.query.filter_by(name='Uncategorized').first()
     return default_category.id if default_category else None
