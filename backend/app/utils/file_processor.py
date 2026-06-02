@@ -164,34 +164,9 @@ def _repair_csv_lines(filepath):
                 repaired.append(output.getvalue())
             else:
                 repaired.append(line)
-        elif len(fields) == header_fields and amount_idx is not None:
-            # Check if amount field looks like a split number:
-            # Only trigger if the raw line has more commas than expected for unquoted fields,
-            # indicating a number like "1,800.41" was split.
-            # Count unquoted commas in raw line
-            raw_field_count = len(next(csv.reader([line.strip()])))
-            # Also check: amt is pure integer AND next is decimal fragment
-            amt_val = fields[amount_idx].strip() if amount_idx < len(fields) else ''
-            next_val = fields[amount_idx + 1].strip() if amount_idx + 1 < len(fields) else ''
-            
-            # Only repair if the pattern strongly suggests a split number
-            # Use strict thousands pattern: 1-2 digit prefix + exactly 3-digit group + optional decimal
-            if (re.match(r'^\d{1,2}$', amt_val) and
-                re.match(r'^\d{3}\.\d{1,2}$', next_val)):
-                # Pattern like "1" + "800.41" strongly suggests "1,800.41" was split
-                joined_amount = amt_val + next_val
-                new_fields = fields[:amount_idx] + [joined_amount] + fields[amount_idx+2:]
-                if len(new_fields) == header_fields - 1:
-                    new_fields.append('')
-                if len(new_fields) == header_fields:
-                    output = io.StringIO()
-                    writer = csv.writer(output)
-                    writer.writerow(new_fields)
-                    repaired.append(output.getvalue())
-                else:
-                    repaired.append(line)
-            else:
-                repaired.append(line)
+        elif len(fields) == header_fields:
+            # Row has correct field count — no repair needed
+            repaired.append(line)
         else:
             repaired.append(line)
     
