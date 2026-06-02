@@ -4057,15 +4057,24 @@ async function populateBankSourceBar(detectedBank) {
 
 function displayPreview(data) {
     const tbody = document.getElementById('previewBody');
-    tbody.innerHTML = data.map(row => `
+    tbody.innerHTML = data.map(row => {
+        // Format date cleanly - show only YYYY-MM-DD
+        let displayDate = row.date;
+        try {
+            const d = new Date(row.date);
+            if (!isNaN(d.getTime())) {
+                displayDate = d.toISOString().split('T')[0];
+            }
+        } catch(e) {}
+        return `
         <tr>
-            <td>${row.date}</td>
+            <td>${displayDate}</td>
             <td>${row.description}</td>
             <td>${formatCurrency(row.amount)}</td>
             <td><span class="tag ${row.type}">${row.type}</span></td>
             <td>${row.category}</td>
         </tr>
-    `).join('');
+    `;}).join('');
 }
 
 async function confirmUpload() {

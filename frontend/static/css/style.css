@@ -1609,6 +1609,24 @@ input:checked + .slider:before {
 .upload-preview table {
     width: 100%;
     margin-bottom: 20px;
+    table-layout: fixed;
+}
+
+.upload-preview table th:nth-child(1),
+.upload-preview table td:nth-child(1) { width: 110px; white-space: nowrap; }
+.upload-preview table th:nth-child(2),
+.upload-preview table td:nth-child(2) { width: auto; word-wrap: break-word; overflow-wrap: break-word; }
+.upload-preview table th:nth-child(3),
+.upload-preview table td:nth-child(3) { width: 100px; white-space: nowrap; text-align: right; }
+.upload-preview table th:nth-child(4),
+.upload-preview table td:nth-child(4) { width: 80px; white-space: nowrap; text-align: center; }
+.upload-preview table th:nth-child(5),
+.upload-preview table td:nth-child(5) { width: 130px; word-wrap: break-word; overflow-wrap: break-word; }
+
+.upload-preview table td,
+.upload-preview table th {
+    padding: 8px 6px;
+    vertical-align: top;
 }
 
 .upload-preview table thead {
