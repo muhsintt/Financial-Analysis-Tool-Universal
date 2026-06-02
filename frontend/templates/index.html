@@ -371,6 +371,33 @@
                                 <!-- Populated by JavaScript -->
                             </div>
                         </div>
+
+                        <div class="report-section">
+                            <h3><i class="fas fa-calculator"></i> Cumulative & Averages</h3>
+                            <p style="color:#888;font-size:0.85em;margin-bottom:12px;">Select a date range to view cumulative totals and monthly averages per category.</p>
+                            <div class="cumulative-controls" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+                                <label style="font-size:0.85em;">From:</label>
+                                <input type="date" id="cumulativeStartDate" class="form-control" style="width:auto;">
+                                <label style="font-size:0.85em;">To:</label>
+                                <input type="date" id="cumulativeEndDate" class="form-control" style="width:auto;">
+                                <button class="btn btn-primary btn-sm" id="cumulativeLoadBtn"><i class="fas fa-sync-alt"></i> Load</button>
+                            </div>
+                            <div id="cumulativeSummaryCards" style="display:none;">
+                                <!-- Summary cards populated by JS -->
+                            </div>
+                            <div id="cumulativeExpenseSection" style="display:none;">
+                                <h4 style="cursor:pointer;margin-top:14px;" onclick="toggleCumulativeSection('cumulativeExpenseTable')">
+                                    <i class="fas fa-chevron-down"></i> Expenses by Category
+                                </h4>
+                                <div id="cumulativeExpenseTable" class="category-table"></div>
+                            </div>
+                            <div id="cumulativeIncomeSection" style="display:none;">
+                                <h4 style="cursor:pointer;margin-top:14px;" onclick="toggleCumulativeSection('cumulativeIncomeTable')">
+                                    <i class="fas fa-chevron-down"></i> Income by Category
+                                </h4>
+                                <div id="cumulativeIncomeTable" class="category-table"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 

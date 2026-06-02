@@ -348,3 +348,96 @@ def get_trending():
         'months': months,
         'data': trend_data[::-1]  # Reverse to show oldest first
     })
+
+
+@reports_bp.route('/cumulative-averages', methods=['GET'])
+@login_required
+def get_cumulative_averages():
+    """Get cumulative totals and monthly averages per category for a date range."""
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    include_excluded = request.args.get('include_excluded', 'false').lower() == 'true'
+
+    # Parse dates
+    try:
+        start_date = datetime.strptime(date_from, '%Y-%m-%d').date() if date_from else date.today().replace(day=1)
+    except (ValueError, TypeError):
+        start_date = date.today().replace(day=1)
+    try:
+        end_date = datetime.strptime(date_to, '%Y-%m-%d').date() if date_to else date.today()
+    except (ValueError, TypeError):
+        end_date = date.today()
+
+    # Validate range
+    if start_date > end_date:
+        return jsonify({'error': 'date_from must be before or equal to date_to'}), 400
+
+    # Calculate period in months (inclusive days / avg days per month)
+    inclusive_days = (end_date - start_date).days + 1
+    period_months = max(inclusive_days / 30.44, 0.01)  # avoid division by zero
+
+    # Query transactions in range for current user
+    query = Transaction.query.filter(
+        Transaction.date >= start_date,
+        Transaction.date <= end_date,
+        Transaction.user_id == session['user_id']
+    )
+    if not include_excluded:
+        query = query.filter_by(is_excluded=False)
+
+    transactions = query.all()
+
+    # Split by type
+    income_txns = [t for t in transactions if t.type == 'income']
+    expense_txns = [t for t in transactions if t.type == 'expense']
+
+    total_income = sum(t.amount for t in income_txns)
+    total_expenses = sum(t.amount for t in expense_txns)
+
+    # Build per-category breakdowns
+    def build_category_breakdown(txns, total):
+        cats = {}
+        for t in txns:
+            if t.category:
+                cat_name = t.category.full_name if hasattr(t.category, 'full_name') else t.category.name
+                cat_color = t.category.color
+            else:
+                cat_name = 'Uncategorized'
+                cat_color = '#999999'
+            if cat_name not in cats:
+                cats[cat_name] = {'amount': 0, 'count': 0, 'color': cat_color}
+            cats[cat_name]['amount'] += t.amount
+            cats[cat_name]['count'] += 1
+
+        result = []
+        for cat_name, data in sorted(cats.items(), key=lambda x: x[1]['amount'], reverse=True):
+            pct = round((data['amount'] / total * 100) if total > 0 else 0, 2)
+            result.append({
+                'category': cat_name,
+                'color': data['color'],
+                'total': round(data['amount'], 2),
+                'average_monthly': round(data['amount'] / period_months, 2),
+                'percentage': pct,
+                'count': data['count']
+            })
+        return result
+
+    categories_expense = build_category_breakdown(expense_txns, total_expenses)
+    categories_income = build_category_breakdown(income_txns, total_income)
+
+    return jsonify({
+        'date_from': start_date.isoformat(),
+        'date_to': end_date.isoformat(),
+        'period_days': inclusive_days,
+        'period_months': round(period_months, 2),
+        'include_excluded': include_excluded,
+        'total_income': round(total_income, 2),
+        'total_expenses': round(total_expenses, 2),
+        'net_cumulative': round(total_income - total_expenses, 2),
+        'avg_monthly_income': round(total_income / period_months, 2),
+        'avg_monthly_expenses': round(total_expenses / period_months, 2),
+        'avg_monthly_net': round((total_income - total_expenses) / period_months, 2),
+        'categories_expense': categories_expense,
+        'categories_income': categories_income,
+        'transaction_count': len(transactions)
+    })

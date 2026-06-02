@@ -2746,6 +2746,9 @@ async function loadReports() {
         const categoryResponse = await apiFetch(`${API_URL}/reports/by-category?${params}&type=expense`);
         const categoryData = await categoryResponse.json();
         displayCategoryBreakdown(categoryData);
+
+        // Initialize cumulative & averages section
+        initCumulativeAverages();
     } catch (error) {
         console.error('Error loading reports:', error);
     }
@@ -2844,6 +2847,142 @@ function displayCategoryBreakdown(data) {
             </div>
         </div>
     `).join('');
+}
+
+// ==========================================
+// Cumulative & Averages Functions
+// ==========================================
+
+function initCumulativeAverages() {
+    const startInput = document.getElementById('cumulativeStartDate');
+    const endInput = document.getElementById('cumulativeEndDate');
+    const loadBtn = document.getElementById('cumulativeLoadBtn');
+
+    if (!startInput || !endInput || !loadBtn) return;
+
+    // Default to last 3 months
+    const today = new Date();
+    const threeMonthsAgo = new Date(today);
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    startInput.value = threeMonthsAgo.toISOString().split('T')[0];
+    endInput.value = today.toISOString().split('T')[0];
+
+    loadBtn.addEventListener('click', loadCumulativeAverages);
+}
+
+async function loadCumulativeAverages() {
+    const dateFrom = document.getElementById('cumulativeStartDate').value;
+    const dateTo = document.getElementById('cumulativeEndDate').value;
+
+    if (!dateFrom || !dateTo) {
+        alert('Please select both start and end dates.');
+        return;
+    }
+    if (dateFrom > dateTo) {
+        alert('Start date must be before end date.');
+        return;
+    }
+
+    try {
+        const response = await apiFetch(`${API_URL}/reports/cumulative-averages?date_from=${dateFrom}&date_to=${dateTo}&include_excluded=false`);
+        const data = await response.json();
+        displayCumulativeAverages(data);
+    } catch (error) {
+        console.error('Error loading cumulative averages:', error);
+    }
+}
+
+function displayCumulativeAverages(data) {
+    // Summary cards
+    const cardsContainer = document.getElementById('cumulativeSummaryCards');
+    cardsContainer.style.display = 'grid';
+    cardsContainer.style.gridTemplateColumns = 'repeat(auto-fit, minmax(160px, 1fr))';
+    cardsContainer.style.gap = '10px';
+    cardsContainer.style.marginBottom = '16px';
+
+    cardsContainer.innerHTML = `
+        <div class="summary-card" style="background:#f0fdf4;border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:0.75em;color:#666;">Total Income</div>
+            <div style="font-size:1.1em;font-weight:bold;color:#16a34a;">${formatCurrency(data.total_income)}</div>
+        </div>
+        <div class="summary-card" style="background:#fef2f2;border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:0.75em;color:#666;">Total Expenses</div>
+            <div style="font-size:1.1em;font-weight:bold;color:#dc2626;">${formatCurrency(data.total_expenses)}</div>
+        </div>
+        <div class="summary-card" style="background:#f0f9ff;border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:0.75em;color:#666;">Net</div>
+            <div style="font-size:1.1em;font-weight:bold;color:${data.net_cumulative >= 0 ? '#16a34a' : '#dc2626'};">${formatCurrency(data.net_cumulative)}</div>
+        </div>
+        <div class="summary-card" style="background:#f0fdf4;border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:0.75em;color:#666;">Avg Monthly Income</div>
+            <div style="font-size:1.1em;font-weight:bold;color:#16a34a;">${formatCurrency(data.avg_monthly_income)}</div>
+        </div>
+        <div class="summary-card" style="background:#fef2f2;border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:0.75em;color:#666;">Avg Monthly Expenses</div>
+            <div style="font-size:1.1em;font-weight:bold;color:#dc2626;">${formatCurrency(data.avg_monthly_expenses)}</div>
+        </div>
+        <div class="summary-card" style="background:#f0f9ff;border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:0.75em;color:#666;">Avg Monthly Net</div>
+            <div style="font-size:1.1em;font-weight:bold;color:${data.avg_monthly_net >= 0 ? '#16a34a' : '#dc2626'};">${formatCurrency(data.avg_monthly_net)}</div>
+        </div>
+    `;
+
+    // Period info
+    const periodInfo = `<p style="font-size:0.8em;color:#888;margin-top:8px;">Period: ${data.period_days} days (~${data.period_months} months) | ${data.transaction_count} transactions</p>`;
+    cardsContainer.innerHTML += periodInfo;
+
+    // Expense categories table
+    const expSection = document.getElementById('cumulativeExpenseSection');
+    const expTable = document.getElementById('cumulativeExpenseTable');
+    if (data.categories_expense && data.categories_expense.length > 0) {
+        expSection.style.display = 'block';
+        expTable.innerHTML = buildCumulativeCategoryTable(data.categories_expense);
+    } else {
+        expSection.style.display = 'none';
+    }
+
+    // Income categories table
+    const incSection = document.getElementById('cumulativeIncomeSection');
+    const incTable = document.getElementById('cumulativeIncomeTable');
+    if (data.categories_income && data.categories_income.length > 0) {
+        incSection.style.display = 'block';
+        incTable.innerHTML = buildCumulativeCategoryTable(data.categories_income);
+    } else {
+        incSection.style.display = 'none';
+    }
+}
+
+function buildCumulativeCategoryTable(categories) {
+    let html = `<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
+        <thead>
+            <tr style="border-bottom:2px solid #e5e7eb;text-align:left;">
+                <th style="padding:8px 4px;">Category</th>
+                <th style="padding:8px 4px;text-align:right;">Total</th>
+                <th style="padding:8px 4px;text-align:right;">Monthly Avg</th>
+                <th style="padding:8px 4px;text-align:right;">%</th>
+                <th style="padding:8px 4px;text-align:right;">Count</th>
+            </tr>
+        </thead>
+        <tbody>`;
+    for (const cat of categories) {
+        html += `<tr style="border-bottom:1px solid #f3f4f6;">
+            <td style="padding:6px 4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${cat.color};margin-right:6px;"></span>${cat.category}</td>
+            <td style="padding:6px 4px;text-align:right;font-weight:600;">${formatCurrency(cat.total)}</td>
+            <td style="padding:6px 4px;text-align:right;">${formatCurrency(cat.average_monthly)}</td>
+            <td style="padding:6px 4px;text-align:right;">${cat.percentage}%</td>
+            <td style="padding:6px 4px;text-align:right;">${cat.count}</td>
+        </tr>`;
+    }
+    html += '</tbody></table>';
+    return html;
+}
+
+function toggleCumulativeSection(tableId) {
+    const table = document.getElementById(tableId);
+    if (table) {
+        table.style.display = table.style.display === 'none' ? '' : 'none';
+    }
 }
 
 // ==========================================
