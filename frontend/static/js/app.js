@@ -415,9 +415,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Scroll-to-top button visibility
     const scrollToTopBtn = document.getElementById('scrollToTopBtn');
     if (scrollToTopBtn) {
-        window.addEventListener('scroll', () => {
-            scrollToTopBtn.style.display = window.scrollY > 300 ? 'block' : 'none';
+        const mainContent = document.querySelector('.main-content');
+        const scrollTarget = mainContent || window;
+        const getScrollTop = () => mainContent ? mainContent.scrollTop : window.scrollY;
+
+        (mainContent || window).addEventListener('scroll', () => {
+            scrollToTopBtn.style.display = getScrollTop() > 300 ? 'block' : 'none';
         });
+
+        scrollToTopBtn.onclick = () => {
+            scrollTarget.scrollTo({ top: 0, behavior: 'smooth' });
+        };
     }
     
     // Check authentication first
