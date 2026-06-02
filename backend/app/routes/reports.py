@@ -353,9 +353,10 @@ def get_trending():
 @reports_bp.route('/cumulative-averages', methods=['GET'])
 @login_required
 def get_cumulative_averages():
-    """Get cumulative totals and monthly averages per category for a date range."""
+    """Get cumulative totals and averages per category for a date range."""
     date_from = request.args.get('date_from')
     date_to = request.args.get('date_to')
+    avg_type = request.args.get('avg_type', 'monthly')  # daily, weekly, monthly, quarterly
     include_excluded = request.args.get('include_excluded', 'false').lower() == 'true'
 
     # Parse dates
@@ -372,9 +373,15 @@ def get_cumulative_averages():
     if start_date > end_date:
         return jsonify({'error': 'date_from must be before or equal to date_to'}), 400
 
-    # Calculate period in months (inclusive days / avg days per month)
+    # Calculate period divisor based on average type
     inclusive_days = (end_date - start_date).days + 1
-    period_months = max(inclusive_days / 30.44, 0.01)  # avoid division by zero
+    divisors = {
+        'daily': max(inclusive_days, 1),
+        'weekly': max(inclusive_days / 7, 0.01),
+        'monthly': max(inclusive_days / 30.44, 0.01),
+        'quarterly': max(inclusive_days / 91.31, 0.01),
+    }
+    period_divisor = divisors.get(avg_type, divisors['monthly'])
 
     # Query transactions in range for current user
     query = Transaction.query.filter(
@@ -416,7 +423,7 @@ def get_cumulative_averages():
                 'category': cat_name,
                 'color': data['color'],
                 'total': round(data['amount'], 2),
-                'average_monthly': round(data['amount'] / period_months, 2),
+                'average': round(data['amount'] / period_divisor, 2),
                 'percentage': pct,
                 'count': data['count']
             })
@@ -429,14 +436,15 @@ def get_cumulative_averages():
         'date_from': start_date.isoformat(),
         'date_to': end_date.isoformat(),
         'period_days': inclusive_days,
-        'period_months': round(period_months, 2),
+        'period_units': round(period_divisor, 2),
+        'avg_type': avg_type,
         'include_excluded': include_excluded,
         'total_income': round(total_income, 2),
         'total_expenses': round(total_expenses, 2),
         'net_cumulative': round(total_income - total_expenses, 2),
-        'avg_monthly_income': round(total_income / period_months, 2),
-        'avg_monthly_expenses': round(total_expenses / period_months, 2),
-        'avg_monthly_net': round((total_income - total_expenses) / period_months, 2),
+        'avg_income': round(total_income / period_divisor, 2),
+        'avg_expenses': round(total_expenses / period_divisor, 2),
+        'avg_net': round((total_income - total_expenses) / period_divisor, 2),
         'categories_expense': categories_expense,
         'categories_income': categories_income,
         'transaction_count': len(transactions)

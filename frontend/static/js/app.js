@@ -2874,6 +2874,7 @@ function initCumulativeAverages() {
 async function loadCumulativeAverages() {
     const dateFrom = document.getElementById('cumulativeStartDate').value;
     const dateTo = document.getElementById('cumulativeEndDate').value;
+    const avgType = document.getElementById('cumulativeAvgType').value;
 
     if (!dateFrom || !dateTo) {
         alert('Please select both start and end dates.');
@@ -2885,7 +2886,7 @@ async function loadCumulativeAverages() {
     }
 
     try {
-        const response = await apiFetch(`${API_URL}/reports/cumulative-averages?date_from=${dateFrom}&date_to=${dateTo}&include_excluded=false`);
+        const response = await apiFetch(`${API_URL}/reports/cumulative-averages?date_from=${dateFrom}&date_to=${dateTo}&avg_type=${avgType}&include_excluded=false`);
         const data = await response.json();
         displayCumulativeAverages(data);
     } catch (error) {
@@ -2893,7 +2894,14 @@ async function loadCumulativeAverages() {
     }
 }
 
+function getAvgLabel(avgType) {
+    const labels = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly' };
+    return labels[avgType] || 'Monthly';
+}
+
 function displayCumulativeAverages(data) {
+    const avgLabel = getAvgLabel(data.avg_type);
+
     // Summary cards
     const cardsContainer = document.getElementById('cumulativeSummaryCards');
     cardsContainer.style.display = 'grid';
@@ -2915,21 +2923,21 @@ function displayCumulativeAverages(data) {
             <div style="font-size:1.1em;font-weight:bold;color:${data.net_cumulative >= 0 ? '#16a34a' : '#dc2626'};">${formatCurrency(data.net_cumulative)}</div>
         </div>
         <div class="summary-card" style="background:#f0fdf4;border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:0.75em;color:#666;">Avg Monthly Income</div>
-            <div style="font-size:1.1em;font-weight:bold;color:#16a34a;">${formatCurrency(data.avg_monthly_income)}</div>
+            <div style="font-size:0.75em;color:#666;">Avg ${avgLabel} Income</div>
+            <div style="font-size:1.1em;font-weight:bold;color:#16a34a;">${formatCurrency(data.avg_income)}</div>
         </div>
         <div class="summary-card" style="background:#fef2f2;border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:0.75em;color:#666;">Avg Monthly Expenses</div>
-            <div style="font-size:1.1em;font-weight:bold;color:#dc2626;">${formatCurrency(data.avg_monthly_expenses)}</div>
+            <div style="font-size:0.75em;color:#666;">Avg ${avgLabel} Expenses</div>
+            <div style="font-size:1.1em;font-weight:bold;color:#dc2626;">${formatCurrency(data.avg_expenses)}</div>
         </div>
         <div class="summary-card" style="background:#f0f9ff;border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:0.75em;color:#666;">Avg Monthly Net</div>
-            <div style="font-size:1.1em;font-weight:bold;color:${data.avg_monthly_net >= 0 ? '#16a34a' : '#dc2626'};">${formatCurrency(data.avg_monthly_net)}</div>
+            <div style="font-size:0.75em;color:#666;">Avg ${avgLabel} Net</div>
+            <div style="font-size:1.1em;font-weight:bold;color:${data.avg_net >= 0 ? '#16a34a' : '#dc2626'};">${formatCurrency(data.avg_net)}</div>
         </div>
     `;
 
     // Period info
-    const periodInfo = `<p style="font-size:0.8em;color:#888;margin-top:8px;">Period: ${data.period_days} days (~${data.period_months} months) | ${data.transaction_count} transactions</p>`;
+    const periodInfo = `<p style="font-size:0.8em;color:#888;margin-top:8px;">Period: ${data.period_days} days (~${data.period_units} ${data.avg_type === 'daily' ? 'days' : data.avg_type === 'weekly' ? 'weeks' : data.avg_type === 'quarterly' ? 'quarters' : 'months'}) | ${data.transaction_count} transactions</p>`;
     cardsContainer.innerHTML += periodInfo;
 
     // Expense categories table
@@ -2937,7 +2945,7 @@ function displayCumulativeAverages(data) {
     const expTable = document.getElementById('cumulativeExpenseTable');
     if (data.categories_expense && data.categories_expense.length > 0) {
         expSection.style.display = 'block';
-        expTable.innerHTML = buildCumulativeCategoryTable(data.categories_expense);
+        expTable.innerHTML = buildCumulativeCategoryTable(data.categories_expense, avgLabel);
     } else {
         expSection.style.display = 'none';
     }
@@ -2947,19 +2955,19 @@ function displayCumulativeAverages(data) {
     const incTable = document.getElementById('cumulativeIncomeTable');
     if (data.categories_income && data.categories_income.length > 0) {
         incSection.style.display = 'block';
-        incTable.innerHTML = buildCumulativeCategoryTable(data.categories_income);
+        incTable.innerHTML = buildCumulativeCategoryTable(data.categories_income, avgLabel);
     } else {
         incSection.style.display = 'none';
     }
 }
 
-function buildCumulativeCategoryTable(categories) {
+function buildCumulativeCategoryTable(categories, avgLabel) {
     let html = `<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
         <thead>
             <tr style="border-bottom:2px solid #e5e7eb;text-align:left;">
                 <th style="padding:8px 4px;">Category</th>
                 <th style="padding:8px 4px;text-align:right;">Total</th>
-                <th style="padding:8px 4px;text-align:right;">Monthly Avg</th>
+                <th style="padding:8px 4px;text-align:right;">${avgLabel} Avg</th>
                 <th style="padding:8px 4px;text-align:right;">%</th>
                 <th style="padding:8px 4px;text-align:right;">Count</th>
             </tr>
@@ -2969,7 +2977,7 @@ function buildCumulativeCategoryTable(categories) {
         html += `<tr style="border-bottom:1px solid #f3f4f6;">
             <td style="padding:6px 4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${cat.color};margin-right:6px;"></span>${cat.category}</td>
             <td style="padding:6px 4px;text-align:right;font-weight:600;">${formatCurrency(cat.total)}</td>
-            <td style="padding:6px 4px;text-align:right;">${formatCurrency(cat.average_monthly)}</td>
+            <td style="padding:6px 4px;text-align:right;">${formatCurrency(cat.average)}</td>
             <td style="padding:6px 4px;text-align:right;">${cat.percentage}%</td>
             <td style="padding:6px 4px;text-align:right;">${cat.count}</td>
         </tr>`;

@@ -380,6 +380,13 @@
                                 <input type="date" id="cumulativeStartDate" class="form-control" style="width:auto;">
                                 <label style="font-size:0.85em;">To:</label>
                                 <input type="date" id="cumulativeEndDate" class="form-control" style="width:auto;">
+                                <label style="font-size:0.85em;">Average:</label>
+                                <select id="cumulativeAvgType" class="form-control" style="width:auto;">
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                    <option value="monthly" selected>Monthly</option>
+                                    <option value="quarterly">Quarterly</option>
+                                </select>
                                 <button class="btn btn-primary btn-sm" id="cumulativeLoadBtn"><i class="fas fa-sync-alt"></i> Load</button>
                             </div>
                             <div id="cumulativeSummaryCards" style="display:none;">
