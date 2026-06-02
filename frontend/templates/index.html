@@ -258,6 +258,9 @@
                             <button class="btn btn-warning" id="bulkDeleteFileBtn">
                                 <i class="fas fa-file-upload"></i> Delete by File
                             </button>
+                            <button class="btn btn-info" id="sanitizeBtn" title="Detect and exclude inter-account transfers">
+                                <i class="fas fa-broom"></i> Sanitize
+                            </button>
                         </div>
                         <div class="filters">
                             <select id="typeFilter" class="form-control">
@@ -1560,6 +1563,39 @@
                     <i class="fas fa-trash"></i> Delete These Transactions
                 </button>
                 <button class="btn btn-secondary" onclick="closeModal('bulkDeletePreviewModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sanitize Modal -->
+    <div id="sanitizeModal" class="modal">
+        <div class="modal-content" style="max-width: 850px; max-height: 85vh; overflow-y: auto;">
+            <span class="close" onclick="closeModal('sanitizeModal')">&times;</span>
+            <h2><i class="fas fa-broom"></i> Sanitize Transactions</h2>
+            <p style="color:#666;margin-bottom:12px;">Detected potential inter-account transfers (same amount, different banks/sources, within 3 days). Select pairs to exclude from calculations.</p>
+            <div id="sanitizeLoading" style="text-align:center;padding:20px;display:none;">
+                <i class="fas fa-spinner fa-spin"></i> Scanning transactions...
+            </div>
+            <div id="sanitizeResults">
+                <div id="sanitizeEmpty" style="display:none;text-align:center;padding:20px;color:#666;">
+                    <i class="fas fa-check-circle" style="color:#16a34a;font-size:2em;"></i>
+                    <p style="margin-top:10px;">No potential inter-account transfers detected.</p>
+                </div>
+                <div id="sanitizePairsContainer" style="display:none;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <label><input type="checkbox" id="sanitizeSelectAll" onchange="toggleSanitizeSelectAll(this.checked)"> <strong>Select All</strong></label>
+                        <span id="sanitizePairCount" style="color:#888;font-size:0.85em;"></span>
+                    </div>
+                    <div id="sanitizePairsList" style="max-height:50vh;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div class="form-actions" style="margin-top:16px;">
+                        <button class="btn btn-primary" id="sanitizeApplyBtn" onclick="applySanitization()">
+                            <i class="fas fa-check"></i> Exclude Selected Pairs
+                        </button>
+                        <button class="btn btn-secondary" onclick="closeModal('sanitizeModal')">Cancel</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

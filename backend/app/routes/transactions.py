@@ -518,3 +518,144 @@ def preview_clear_transactions():
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@transactions_bp.route('/sanitize-preview', methods=['GET'])
+@login_required
+def sanitize_preview():
+    """Detect potential inter-account transfer pairs for sanitization."""
+    user_id = session['user_id']
+
+    # Get all non-excluded transactions for current user
+    transactions = Transaction.query.filter_by(
+        user_id=user_id,
+        is_excluded=False
+    ).order_by(Transaction.date).all()
+
+    # Build index by rounded amount for efficient matching
+    from collections import defaultdict
+    amount_index = defaultdict(list)
+    for t in transactions:
+        key = round(t.amount, 2)
+        amount_index[key].append(t)
+
+    pairs = []
+    used_ids = set()
+
+    for amount_key, txns in amount_index.items():
+        if len(txns) < 2:
+            continue
+
+        # Find pairs: one income + one expense, different bank/source, within 3 days
+        income_txns = [t for t in txns if t.type == 'income']
+        expense_txns = [t for t in txns if t.type == 'expense']
+
+        for inc in income_txns:
+            if inc.id in used_ids:
+                continue
+            for exp in expense_txns:
+                if exp.id in used_ids:
+                    continue
+                # Check different bank or different upload source
+                different_source = False
+                if inc.bank_source and exp.bank_source and inc.bank_source != exp.bank_source:
+                    different_source = True
+                elif inc.upload_id and exp.upload_id and inc.upload_id != exp.upload_id:
+                    different_source = True
+                elif inc.bank_source != exp.bank_source:
+                    # One has bank_source, other doesn't or different
+                    if inc.bank_source or exp.bank_source:
+                        different_source = True
+
+                if not different_source:
+                    continue
+
+                # Check within 3 days
+                day_diff = abs((inc.date - exp.date).days)
+                if day_diff > 3:
+                    continue
+
+                # Valid pair found
+                pairs.append({
+                    'id': f"{inc.id}-{exp.id}",
+                    'transaction_a': {
+                        'id': inc.id,
+                        'date': inc.date.isoformat(),
+                        'description': inc.description,
+                        'amount': inc.amount,
+                        'type': inc.type,
+                        'bank_source': inc.bank_source or 'Unknown',
+                        'category_name': inc.category.full_name if inc.category and hasattr(inc.category, 'full_name') else (inc.category.name if inc.category else 'Unknown')
+                    },
+                    'transaction_b': {
+                        'id': exp.id,
+                        'date': exp.date.isoformat(),
+                        'description': exp.description,
+                        'amount': exp.amount,
+                        'type': exp.type,
+                        'bank_source': exp.bank_source or 'Unknown',
+                        'category_name': exp.category.full_name if exp.category and hasattr(exp.category, 'full_name') else (exp.category.name if exp.category else 'Unknown')
+                    },
+                    'amount': amount_key,
+                    'day_difference': day_diff
+                })
+                used_ids.add(inc.id)
+                used_ids.add(exp.id)
+                break  # Move to next income transaction
+
+    return jsonify({
+        'pairs': pairs,
+        'count': len(pairs)
+    })
+
+
+@transactions_bp.route('/sanitize', methods=['POST'])
+@write_required
+def apply_sanitization():
+    """Exclude selected transaction pairs as inter-account transfers."""
+    user_id = session['user_id']
+    data = request.get_json()
+    pair_ids = data.get('pair_ids', [])
+
+    if not pair_ids:
+        return jsonify({'error': 'No pairs selected'}), 400
+
+    excluded_count = 0
+
+    for pair_id in pair_ids:
+        parts = pair_id.split('-')
+        if len(parts) != 2:
+            continue
+        try:
+            id_a = int(parts[0])
+            id_b = int(parts[1])
+        except ValueError:
+            continue
+
+        # Revalidate: both must belong to user, not already excluded, same amount, different source
+        t_a = Transaction.query.filter_by(id=id_a, user_id=user_id, is_excluded=False).first()
+        t_b = Transaction.query.filter_by(id=id_b, user_id=user_id, is_excluded=False).first()
+
+        if not t_a or not t_b:
+            continue
+        if round(t_a.amount, 2) != round(t_b.amount, 2):
+            continue
+
+        # Exclude both and add note
+        t_a.is_excluded = True
+        t_a.notes = (t_a.notes + '\n' if t_a.notes else '') + f'[Sanitized] Inter-account transfer detected (paired with transaction #{t_b.id})'
+        t_b.is_excluded = True
+        t_b.notes = (t_b.notes + '\n' if t_b.notes else '') + f'[Sanitized] Inter-account transfer detected (paired with transaction #{t_a.id})'
+
+        excluded_count += 2
+
+    db.session.commit()
+
+    log_activity('sanitize', f'Sanitized {excluded_count} transactions ({len(pair_ids)} pairs)',
+                 {'pair_ids': pair_ids, 'excluded_count': excluded_count})
+
+    return jsonify({
+        'success': True,
+        'excluded_count': excluded_count,
+        'pairs_processed': len(pair_ids)
+    })

@@ -1178,6 +1178,9 @@ function initializeEventListeners() {
 
     document.getElementById('bulkDeleteFile').addEventListener('change', handleBulkDeleteFileUpload);
 
+    // Sanitize button
+    document.getElementById('sanitizeBtn').addEventListener('click', openSanitizeModal);
+
     // Upload
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
@@ -2262,6 +2265,17 @@ async function handleTransactionSubmit(e) {
         return;
     }
 
+    // Warn if re-including a sanitized transaction
+    if (state.currentTransaction && state.currentTransaction.is_excluded && !isExcluded) {
+        if (state.currentTransaction.notes && state.currentTransaction.notes.includes('[Sanitized]')) {
+            const confirmed = confirm(
+                'This transaction was excluded by sanitization (detected as an inter-account transfer).\n\n' +
+                'Are you sure you want to re-include it in calculations?'
+            );
+            if (!confirmed) return;
+        }
+    }
+
     try {
         const url = state.currentTransaction ? 
             `${API_URL}/transactions/${state.currentTransaction.id}` :
@@ -2524,6 +2538,19 @@ async function confirmBulkDeleteFromFile() {
 // Update Transaction Status (from dropdown)
 async function updateTransactionStatus(id, status) {
     const isExcluded = status === 'true';
+
+    // If re-including, check if it was sanitized
+    if (!isExcluded) {
+        const trans = state.transactions.find(t => t.id === id);
+        if (trans && trans.notes && trans.notes.includes('[Sanitized]')) {
+            const confirmed = confirm(
+                'This transaction was excluded by sanitization (detected as an inter-account transfer).\n\n' +
+                'Are you sure you want to re-include it in calculations?'
+            );
+            if (!confirmed) return;
+        }
+    }
+
     try {
         const response = await apiFetch(`${API_URL}/transactions/${id}`, {
             method: 'PUT',
@@ -2541,6 +2568,110 @@ async function updateTransactionStatus(id, status) {
     } catch (error) {
         console.error('Error updating status:', error);
         alert('Error updating transaction status');
+    }
+}
+
+// ==========================================
+// Sanitize Functions
+// ==========================================
+
+async function openSanitizeModal() {
+    openModal('sanitizeModal');
+    document.getElementById('sanitizeLoading').style.display = 'block';
+    document.getElementById('sanitizeEmpty').style.display = 'none';
+    document.getElementById('sanitizePairsContainer').style.display = 'none';
+
+    try {
+        const response = await apiFetch(`${API_URL}/transactions/sanitize-preview`);
+        if (!response.ok) throw new Error('Failed to load sanitize preview');
+
+        const data = await response.json();
+        document.getElementById('sanitizeLoading').style.display = 'none';
+
+        if (!data.pairs || data.pairs.length === 0) {
+            document.getElementById('sanitizeEmpty').style.display = 'block';
+            return;
+        }
+
+        displaySanitizePairs(data.pairs);
+    } catch (error) {
+        console.error('Error loading sanitize preview:', error);
+        document.getElementById('sanitizeLoading').style.display = 'none';
+        alert('Error scanning for transfers: ' + error.message);
+    }
+}
+
+function displaySanitizePairs(pairs) {
+    const container = document.getElementById('sanitizePairsContainer');
+    const list = document.getElementById('sanitizePairsList');
+    const countEl = document.getElementById('sanitizePairCount');
+
+    container.style.display = 'block';
+    countEl.textContent = `${pairs.length} potential transfer pair${pairs.length !== 1 ? 's' : ''} found`;
+
+    list.innerHTML = pairs.map(pair => `
+        <div class="sanitize-pair" style="padding:12px;border-bottom:1px solid #e5e7eb;">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+                <input type="checkbox" class="sanitize-pair-checkbox" value="${pair.id}" checked style="margin-top:4px;">
+                <div style="flex:1;font-size:0.85em;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <strong style="color:#3498db;">${formatCurrency(pair.amount)}</strong>
+                        <span style="color:#888;font-size:0.85em;">${pair.day_difference === 0 ? 'Same day' : pair.day_difference + ' day' + (pair.day_difference > 1 ? 's' : '') + ' apart'}</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                        <div style="background:#f0fdf4;padding:6px 8px;border-radius:4px;">
+                            <div style="font-size:0.8em;color:#16a34a;font-weight:600;">INCOME</div>
+                            <div>${pair.transaction_a.date}</div>
+                            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(pair.transaction_a.description)}">${escapeHtml(pair.transaction_a.description)}</div>
+                            <div style="color:#666;">Bank: ${escapeHtml(pair.transaction_a.bank_source)}</div>
+                        </div>
+                        <div style="background:#fef2f2;padding:6px 8px;border-radius:4px;">
+                            <div style="font-size:0.8em;color:#dc2626;font-weight:600;">EXPENSE</div>
+                            <div>${pair.transaction_b.date}</div>
+                            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(pair.transaction_b.description)}">${escapeHtml(pair.transaction_b.description)}</div>
+                            <div style="color:#666;">Bank: ${escapeHtml(pair.transaction_b.bank_source)}</div>
+                        </div>
+                    </div>
+                </div>
+            </label>
+        </div>
+    `).join('');
+}
+
+function toggleSanitizeSelectAll(checked) {
+    document.querySelectorAll('.sanitize-pair-checkbox').forEach(cb => {
+        cb.checked = checked;
+    });
+}
+
+async function applySanitization() {
+    const checkedBoxes = document.querySelectorAll('.sanitize-pair-checkbox:checked');
+    const pairIds = Array.from(checkedBoxes).map(cb => cb.value);
+
+    if (pairIds.length === 0) {
+        alert('Please select at least one pair to exclude.');
+        return;
+    }
+
+    const confirmed = confirm(`This will exclude ${pairIds.length * 2} transactions (${pairIds.length} pair${pairIds.length > 1 ? 's' : ''}) from all calculations.\n\nContinue?`);
+    if (!confirmed) return;
+
+    try {
+        const response = await apiFetch(`${API_URL}/transactions/sanitize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pair_ids: pairIds })
+        });
+
+        if (!response.ok) throw new Error('Failed to apply sanitization');
+
+        const result = await response.json();
+        alert(`Sanitization complete! ${result.excluded_count} transactions excluded.`);
+        closeModal('sanitizeModal');
+        loadTransactions();
+    } catch (error) {
+        console.error('Error applying sanitization:', error);
+        alert('Error applying sanitization: ' + error.message);
     }
 }
 
