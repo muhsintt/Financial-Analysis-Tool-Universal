@@ -2,8 +2,17 @@ import pandas as pd
 from datetime import datetime
 import csv
 
-def detect_transaction_type(description, amount):
-    """Detect if transaction is income or expense"""
+def detect_transaction_type(description, amount, type_hint=None):
+    """Detect if transaction is income or expense.
+    
+    type_hint can be 'credit'/'debit' from a bank statement column.
+    """
+    if type_hint:
+        hint_lower = str(type_hint).strip().lower()
+        if hint_lower in ('credit', 'cr', 'deposit', 'credits'):
+            return 'income'
+        elif hint_lower in ('debit', 'dr', 'withdrawal', 'debits'):
+            return 'expense'
     if amount < 0:
         return 'expense'
     return 'income'
@@ -119,22 +128,99 @@ def process_csv_file(filepath, limit=None, user_id=None, column_mapping=None):
                 if column_mapping:
                     date_str   = row.get(column_mapping['date_col'], '')
                     desc       = row.get(column_mapping['description_col'], '')
-                    amount_str = row.get(column_mapping['amount_col'], '')
                     cat_str    = row.get(column_mapping.get('category_col', ''), '') if column_mapping.get('category_col') else ''
+
+                    # Handle amount: either single amount_col or separate debit/credit columns
+                    amount_str = ''
+                    type_hint = None
+                    debit_col = column_mapping.get('debit_col')
+                    credit_col = column_mapping.get('credit_col')
+
+                    if debit_col or credit_col:
+                        # Separate debit/credit columns
+                        debit_val = row.get(debit_col, '').strip() if debit_col else ''
+                        credit_val = row.get(credit_col, '').strip() if credit_col else ''
+                        # Clean currency symbols
+                        debit_clean = debit_val.replace('$', '').replace(',', '').strip() if debit_val else ''
+                        credit_clean = credit_val.replace('$', '').replace(',', '').strip() if credit_val else ''
+
+                        try:
+                            debit_num = float(debit_clean) if debit_clean and debit_clean != '0' else 0
+                        except (ValueError, TypeError):
+                            debit_num = 0
+                        try:
+                            credit_num = float(credit_clean) if credit_clean and credit_clean != '0' else 0
+                        except (ValueError, TypeError):
+                            credit_num = 0
+
+                        if credit_num > 0:
+                            amount_str = str(credit_num)
+                            type_hint = 'credit'
+                        elif debit_num > 0:
+                            amount_str = str(debit_num)
+                            type_hint = 'debit'
+                        elif debit_num < 0:
+                            # Negative in debit column means credit
+                            amount_str = str(abs(debit_num))
+                            type_hint = 'credit'
+                        else:
+                            continue  # No amount found
+                    else:
+                        amount_str = row.get(column_mapping.get('amount_col', ''), '')
+
                     # Collect extra columns into notes
-                    known = {column_mapping['date_col'], column_mapping['description_col'], column_mapping['amount_col']}
+                    known = {column_mapping['date_col'], column_mapping['description_col']}
+                    if column_mapping.get('amount_col'):
+                        known.add(column_mapping['amount_col'])
                     if column_mapping.get('category_col'):
                         known.add(column_mapping['category_col'])
+                    if debit_col:
+                        known.add(debit_col)
+                    if credit_col:
+                        known.add(credit_col)
                     notes = ' | '.join(f"{k}: {v}" for k, v in row.items() if k not in known and str(v).strip())
                 else:
                     date_str   = (row.get('Date') or row.get('date') or row.get('Transaction Date')
                                   or row.get('Post Date') or row.get('Posted Date') or '')
                     desc       = (row.get('Description') or row.get('description')
                                   or row.get('Memo') or row.get('Payee') or row.get('payee') or '')
-                    amount_str = (row.get('Amount') or row.get('amount')
-                                  or row.get('Debit') or '')
                     cat_str    = row.get('Category') or row.get('category') or ''
                     notes      = ''
+                    type_hint  = None
+
+                    # Check for separate Debit/Credit columns
+                    debit_val = (row.get('Debit') or row.get('debit') or row.get('Withdrawals') or '').strip()
+                    credit_val = (row.get('Credit') or row.get('credit') or row.get('Deposits') or '').strip()
+
+                    if debit_val or credit_val:
+                        debit_clean = debit_val.replace('$', '').replace(',', '') if debit_val else ''
+                        credit_clean = credit_val.replace('$', '').replace(',', '') if credit_val else ''
+                        try:
+                            debit_num = float(debit_clean) if debit_clean else 0
+                        except (ValueError, TypeError):
+                            debit_num = 0
+                        try:
+                            credit_num = float(credit_clean) if credit_clean else 0
+                        except (ValueError, TypeError):
+                            credit_num = 0
+
+                        if credit_num > 0:
+                            amount_str = str(credit_num)
+                            type_hint = 'credit'
+                        elif debit_num > 0:
+                            amount_str = str(debit_num)
+                            type_hint = 'debit'
+                        else:
+                            amount_str = (row.get('Amount') or row.get('amount') or '')
+                    else:
+                        amount_str = (row.get('Amount') or row.get('amount') or '')
+
+                    # Check for a Type/Transaction Type column with text values
+                    if not type_hint:
+                        type_col_val = (row.get('Type') or row.get('type') or
+                                       row.get('Transaction Type') or row.get('Trans Type') or '')
+                        if type_col_val:
+                            type_hint = type_col_val
 
                 if not all([date_str, desc, amount_str]):
                     continue
@@ -148,7 +234,7 @@ def process_csv_file(filepath, limit=None, user_id=None, column_mapping=None):
                 except (ValueError, TypeError):
                     continue
 
-                trans_type = detect_transaction_type(desc, amount)
+                trans_type = detect_transaction_type(desc, amount, type_hint)
                 amount = abs(amount)
 
                 # Category: honour CSV value from template if present, else auto-detect
@@ -201,16 +287,58 @@ def process_excel_file(filepath, limit=None, user_id=None, column_mapping=None):
 
             cat_val = None
             notes_str = ''
+            type_hint = None
 
             if column_mapping:
                 date_val   = row.get(column_mapping['date_col'])
                 desc_val   = row.get(column_mapping['description_col'])
-                amount_val = row.get(column_mapping['amount_col'])
                 if column_mapping.get('category_col'):
                     cat_val = row.get(column_mapping['category_col'])
-                known = {column_mapping['date_col'], column_mapping['description_col'], column_mapping['amount_col']}
+
+                # Handle amount: single column or separate debit/credit
+                debit_col = column_mapping.get('debit_col')
+                credit_col = column_mapping.get('credit_col')
+
+                if debit_col or credit_col:
+                    debit_raw = row.get(debit_col) if debit_col else None
+                    credit_raw = row.get(credit_col) if credit_col else None
+
+                    debit_num = 0
+                    credit_num = 0
+                    if debit_raw is not None and not pd.isna(debit_raw):
+                        try:
+                            debit_num = float(str(debit_raw).replace('$', '').replace(',', ''))
+                        except (ValueError, TypeError):
+                            debit_num = 0
+                    if credit_raw is not None and not pd.isna(credit_raw):
+                        try:
+                            credit_num = float(str(credit_raw).replace('$', '').replace(',', ''))
+                        except (ValueError, TypeError):
+                            credit_num = 0
+
+                    if credit_num > 0:
+                        amount_val = credit_num
+                        type_hint = 'credit'
+                    elif debit_num > 0:
+                        amount_val = debit_num
+                        type_hint = 'debit'
+                    elif debit_num < 0:
+                        amount_val = abs(debit_num)
+                        type_hint = 'credit'
+                    else:
+                        amount_val = None
+                else:
+                    amount_val = row.get(column_mapping.get('amount_col'))
+
+                known = {column_mapping['date_col'], column_mapping['description_col']}
+                if column_mapping.get('amount_col'):
+                    known.add(column_mapping['amount_col'])
                 if column_mapping.get('category_col'):
                     known.add(column_mapping['category_col'])
+                if debit_col:
+                    known.add(debit_col)
+                if credit_col:
+                    known.add(credit_col)
                 notes_str = ' | '.join(
                     f"{k}: {v}" for k, v in row.items()
                     if k not in known and not pd.isna(v) and str(v).strip()
@@ -234,20 +362,55 @@ def process_excel_file(filepath, limit=None, user_id=None, column_mapping=None):
                 elif 'memo' in column_map:
                     desc_val = row[column_map['memo']]
 
-                # Amount
-                if 'amount' in column_map:
+                # Amount: check separate debit/credit columns first
+                if 'debit' in column_map and 'credit' in column_map:
+                    debit_raw = row[column_map['debit']]
+                    credit_raw = row[column_map['credit']]
+                    debit_num = 0
+                    credit_num = 0
+                    if not pd.isna(debit_raw):
+                        try:
+                            debit_num = float(str(debit_raw).replace('$', '').replace(',', ''))
+                        except (ValueError, TypeError):
+                            debit_num = 0
+                    if not pd.isna(credit_raw):
+                        try:
+                            credit_num = float(str(credit_raw).replace('$', '').replace(',', ''))
+                        except (ValueError, TypeError):
+                            credit_num = 0
+
+                    if credit_num > 0:
+                        amount_val = credit_num
+                        type_hint = 'credit'
+                    elif debit_num > 0:
+                        amount_val = debit_num
+                        type_hint = 'debit'
+                    else:
+                        amount_val = None
+                elif 'amount' in column_map:
                     amount_val = row[column_map['amount']]
                 elif 'debit' in column_map:
                     amount_val = row[column_map['debit']]
+                    type_hint = 'debit'
                 elif 'credit' in column_map:
                     amount_val = row[column_map['credit']]
+                    type_hint = 'credit'
+
+                # Check for Type column
+                if not type_hint:
+                    for tc in ['type', 'transaction type', 'trans type']:
+                        if tc in column_map:
+                            tv = row[column_map[tc]]
+                            if not pd.isna(tv):
+                                type_hint = str(tv)
+                            break
             
             # Skip if missing required fields or if they are NaN
             if date_val is None or desc_val is None or amount_val is None:
                 continue
             
             # Skip NaN values
-            if pd.isna(date_val) or pd.isna(desc_val) or pd.isna(amount_val):
+            if pd.isna(date_val) or pd.isna(desc_val) or (isinstance(amount_val, float) and pd.isna(amount_val)):
                 continue
             
             try:
@@ -278,7 +441,7 @@ def process_excel_file(filepath, limit=None, user_id=None, column_mapping=None):
             if amount == 0:
                 continue
             
-            trans_type = detect_transaction_type(str(desc_val), amount)
+            trans_type = detect_transaction_type(str(desc_val), amount, type_hint)
             amount = abs(amount)
 
             # Category from template column if present, else auto-detect

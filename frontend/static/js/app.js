@@ -4375,9 +4375,9 @@ async function handleBtFileSelect(files) {
 }
 
 function populateBtColumnSelects(headers) {
-    ['btDateCol','btDescCol','btAmountCol','btCategoryCol'].forEach(id => {
+    ['btDateCol','btDescCol','btAmountCol','btCategoryCol','btDebitCol','btCreditCol'].forEach(id => {
         const sel = document.getElementById(id);
-        const isOpt = id === 'btCategoryCol';
+        const isOpt = ['btCategoryCol','btDebitCol','btCreditCol'].includes(id);
         sel.innerHTML = `<option value="">\u2014 ${isOpt ? 'none' : 'select'} \u2014</option>`;
         headers.forEach(h => {
             sel.innerHTML += `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`;
@@ -4396,8 +4396,10 @@ function autoFillBtMapping(headers) {
     };
     document.getElementById('btDateCol').value    = find(['post date','posted date','transaction date','trans date','date']);
     document.getElementById('btDescCol').value    = find(['payee','description','merchant','memo','narration','details']);
-    document.getElementById('btAmountCol').value  = find(['amount','transaction amount','debit','value','sum']);
-    document.getElementById('btCategoryCol').value = find(['category','type']);
+    document.getElementById('btAmountCol').value  = find(['amount','transaction amount','value','sum']);
+    document.getElementById('btCategoryCol').value = find(['category']);
+    document.getElementById('btDebitCol').value   = find(['debit','debit amount','withdrawals','withdrawal']);
+    document.getElementById('btCreditCol').value  = find(['credit','credit amount','deposits','deposit']);
 }
 
 async function saveBankTemplate() {
@@ -4406,14 +4408,19 @@ async function saveBankTemplate() {
     const desc_col   = document.getElementById('btDescCol').value;
     const amount_col = document.getElementById('btAmountCol').value;
     const cat_col    = document.getElementById('btCategoryCol').value;
+    const debit_col  = document.getElementById('btDebitCol').value;
+    const credit_col = document.getElementById('btCreditCol').value;
 
     if (!name)       { alert('Please enter a bank name.'); return; }
     if (!date_col)   { alert('Please select the Date column.'); return; }
     if (!desc_col)   { alert('Please select the Description / Payee column.'); return; }
-    if (!amount_col) { alert('Please select the Amount column.'); return; }
+    if (!amount_col && !debit_col && !credit_col) { alert('Please select an Amount column, or Debit/Credit columns.'); return; }
 
-    const column_mapping = { date_col, description_col: desc_col, amount_col };
+    const column_mapping = { date_col, description_col: desc_col };
+    if (amount_col) column_mapping.amount_col = amount_col;
     if (cat_col) column_mapping.category_col = cat_col;
+    if (debit_col) column_mapping.debit_col = debit_col;
+    if (credit_col) column_mapping.credit_col = credit_col;
 
     try {
         const response = await apiFetch(`${API_URL}/bank-templates/`, {
@@ -4481,8 +4488,10 @@ function displayBankTemplates(templates) {
                         <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);font-size:0.85rem;">
                             Date: <em>${escapeHtml(t.column_mapping.date_col || '')}</em><br>
                             Desc: <em>${escapeHtml(t.column_mapping.description_col || '')}</em><br>
-                            Amt: <em>${escapeHtml(t.column_mapping.amount_col || '')}</em>
-                            ${t.column_mapping.category_col ? `<br>Cat: <em>${escapeHtml(t.column_mapping.category_col)}</em>` : ''}
+                            ${t.column_mapping.amount_col ? `Amt: <em>${escapeHtml(t.column_mapping.amount_col)}</em><br>` : ''}
+                            ${t.column_mapping.debit_col ? `Debit: <em>${escapeHtml(t.column_mapping.debit_col)}</em><br>` : ''}
+                            ${t.column_mapping.credit_col ? `Credit: <em>${escapeHtml(t.column_mapping.credit_col)}</em><br>` : ''}
+                            ${t.column_mapping.category_col ? `Cat: <em>${escapeHtml(t.column_mapping.category_col)}</em>` : ''}
                         </td>
                         <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);font-size:0.8rem;color:var(--text-muted,#888);">${(t.headers || []).join(', ')}</td>
                         <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);font-size:0.85rem;">${t.created_at ? t.created_at.substring(0, 10) : '\u2014'}</td>

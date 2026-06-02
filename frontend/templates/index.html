@@ -1408,14 +1408,23 @@
                                         <select id="btDescCol" class="form-control"><option value="">— select —</option></select>
                                     </div>
                                     <div class="form-group">
-                                        <label>Amount *</label>
+                                        <label>Amount (single column)</label>
                                         <select id="btAmountCol" class="form-control"><option value="">— select —</option></select>
                                     </div>
                                     <div class="form-group">
                                         <label>Category (optional)</label>
                                         <select id="btCategoryCol" class="form-control"><option value="">— none —</option></select>
                                     </div>
+                                    <div class="form-group">
+                                        <label>Debit column (optional)</label>
+                                        <select id="btDebitCol" class="form-control"><option value="">— none —</option></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Credit column (optional)</label>
+                                        <select id="btCreditCol" class="form-control"><option value="">— none —</option></select>
+                                    </div>
                                 </div>
+                                <p style="font-size:0.8em;color:#888;margin-top:4px;"><em>Use either a single Amount column (negative=expense) OR separate Debit/Credit columns.</em></p>
                                 <div style="margin-top:8px;">
                                     <strong>All headers found:</strong>
                                     <p id="btHeadersDisplay" style="font-size:0.85rem;color:var(--text-muted,#888);"></p>
@@ -1880,6 +1889,6 @@
     </button>
     
     <!-- Scripts -->
-    <script src="/static/js/app.js?v=16"></script>
+    <script src="/static/js/app.js?v=17"></script>
 </body>
 </html>
