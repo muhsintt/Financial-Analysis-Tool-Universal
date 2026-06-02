@@ -2962,6 +2962,11 @@ function displayCumulativeAverages(data) {
 }
 
 function buildCumulativeCategoryTable(categories, avgLabel) {
+    // Calculate combined totals
+    const combinedTotal = categories.reduce((sum, c) => sum + c.total, 0);
+    const combinedAvg = categories.reduce((sum, c) => sum + c.average, 0);
+    const combinedCount = categories.reduce((sum, c) => sum + c.count, 0);
+
     let html = `<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
         <thead>
             <tr style="border-bottom:2px solid #e5e7eb;text-align:left;">
@@ -2972,10 +2977,17 @@ function buildCumulativeCategoryTable(categories, avgLabel) {
                 <th style="padding:8px 4px;text-align:right;">Count</th>
             </tr>
         </thead>
-        <tbody>`;
+        <tbody>
+            <tr style="border-bottom:2px solid #d1d5db;background:#f9fafb;font-weight:700;">
+                <td style="padding:8px 4px;"><i class="fas fa-layer-group" style="margin-right:6px;color:#6b7280;"></i>All Categories Combined</td>
+                <td style="padding:8px 4px;text-align:right;">${formatCurrency(combinedTotal)}</td>
+                <td style="padding:8px 4px;text-align:right;">${formatCurrency(combinedAvg)}</td>
+                <td style="padding:8px 4px;text-align:right;">100%</td>
+                <td style="padding:8px 4px;text-align:right;">${combinedCount}</td>
+            </tr>`;
     for (const cat of categories) {
         html += `<tr style="border-bottom:1px solid #f3f4f6;">
-            <td style="padding:6px 4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${cat.color};margin-right:6px;"></span>${cat.category}</td>
+            <td style="padding:6px 4px;padding-left:12px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${cat.color};margin-right:6px;"></span>${cat.category}</td>
             <td style="padding:6px 4px;text-align:right;font-weight:600;">${formatCurrency(cat.total)}</td>
             <td style="padding:6px 4px;text-align:right;">${formatCurrency(cat.average)}</td>
             <td style="padding:6px 4px;text-align:right;">${cat.percentage}%</td>
