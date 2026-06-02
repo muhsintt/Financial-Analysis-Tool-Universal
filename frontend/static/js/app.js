@@ -4395,7 +4395,7 @@ function autoFillBtMapping(headers) {
         return '';
     };
     document.getElementById('btDateCol').value    = find(['post date','posted date','transaction date','trans date','date']);
-    document.getElementById('btDescCol').value    = find(['payee','description','merchant','memo','narration','details']);
+    document.getElementById('btDescCol').value    = find(['payee','transaction description','description','merchant','memo','narration','details']);
     document.getElementById('btAmountCol').value  = find(['amount','transaction amount','value','sum']);
     document.getElementById('btCategoryCol').value = find(['category']);
     document.getElementById('btDebitCol').value   = find(['debit','debit amount','withdrawals','withdrawal']);

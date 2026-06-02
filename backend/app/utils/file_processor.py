@@ -183,6 +183,7 @@ def process_csv_file(filepath, limit=None, user_id=None, column_mapping=None):
                     date_str   = (row.get('Date') or row.get('date') or row.get('Transaction Date')
                                   or row.get('Post Date') or row.get('Posted Date') or '')
                     desc       = (row.get('Description') or row.get('description')
+                                  or row.get('Transaction Description') or row.get('transaction description')
                                   or row.get('Memo') or row.get('Payee') or row.get('payee') or '')
                     cat_str    = row.get('Category') or row.get('category') or ''
                     notes      = ''
@@ -211,9 +212,11 @@ def process_csv_file(filepath, limit=None, user_id=None, column_mapping=None):
                             amount_str = str(debit_num)
                             type_hint = 'debit'
                         else:
-                            amount_str = (row.get('Amount') or row.get('amount') or '')
+                            amount_str = (row.get('Amount') or row.get('amount')
+                                         or row.get('Transaction Amount') or row.get('transaction amount') or '')
                     else:
-                        amount_str = (row.get('Amount') or row.get('amount') or '')
+                        amount_str = (row.get('Amount') or row.get('amount')
+                                     or row.get('Transaction Amount') or row.get('transaction amount') or '')
 
                     # Check for a Type/Transaction Type column with text values
                     if not type_hint:
