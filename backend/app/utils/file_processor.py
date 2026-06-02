@@ -1,6 +1,8 @@
 import pandas as pd
 from datetime import datetime
 import csv
+import io
+import re
 
 def detect_transaction_type(description, amount, type_hint=None):
     """Detect if transaction is income or expense.
@@ -99,12 +101,101 @@ def categorize_transaction(description, category_id=None, user_id=None):
 
 def _parse_date(date_str):
     """Try multiple date formats and return a date object, or None."""
-    for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m-%d-%Y', '%d/%m/%Y', '%Y/%m/%d'):
+    for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y', '%m-%d-%Y', '%d/%m/%Y', '%Y/%m/%d', '%d-%m-%Y'):
         try:
             return datetime.strptime(date_str.strip(), fmt).date()
         except:
             pass
     return None
+
+
+def _repair_csv_lines(filepath):
+    """Pre-process CSV to fix unquoted numbers containing commas (e.g. 1,800.41).
+    
+    Strategy: If a row has MORE fields than the header, rejoin numeric fragments.
+    If a row has the CORRECT number of fields but an amount field looks like it was
+    split (pure integer in amount position, decimal fragment in next position, and
+    the last expected field is missing/empty), attempt repair by shifting.
+    Returns a list of repaired lines (strings) suitable for csv.DictReader.
+    """
+    with open(filepath, 'r', encoding='utf-8') as f:
+        raw_lines = f.readlines()
+    
+    if not raw_lines:
+        return raw_lines
+    
+    # Count expected fields from header
+    header_row = next(csv.reader([raw_lines[0]]))
+    header_fields = len(header_row)
+    
+    # Identify likely amount column index (for same-field-count repair)
+    amount_idx = None
+    for idx, h in enumerate(header_row):
+        hl = h.strip().lower()
+        if hl in ('amount', 'transaction amount', 'debit', 'credit'):
+            amount_idx = idx
+            break
+    
+    repaired = [raw_lines[0]]
+    for line in raw_lines[1:]:
+        fields = next(csv.reader([line]))
+        
+        if len(fields) > header_fields:
+            # Row has too many fields — rejoin numeric fragments
+            new_fields = []
+            i = 0
+            while i < len(fields):
+                if (i + 1 < len(fields) and
+                    re.match(r'^\d+$', fields[i].strip()) and
+                    re.match(r'^\d+(\.\d+)?$', fields[i+1].strip())):
+                    joined = fields[i].strip() + fields[i+1].strip()
+                    new_fields.append(joined)
+                    i += 2
+                else:
+                    new_fields.append(fields[i])
+                    i += 1
+                if len(new_fields) + (len(fields) - i) == header_fields:
+                    new_fields.extend(fields[i:])
+                    break
+            if len(new_fields) == header_fields:
+                output = io.StringIO()
+                writer = csv.writer(output)
+                writer.writerow(new_fields)
+                repaired.append(output.getvalue())
+            else:
+                repaired.append(line)
+        elif len(fields) == header_fields and amount_idx is not None:
+            # Check if amount field looks like a split number:
+            # Only trigger if the raw line has more commas than expected for unquoted fields,
+            # indicating a number like "1,800.41" was split.
+            # Count unquoted commas in raw line
+            raw_field_count = len(next(csv.reader([line.strip()])))
+            # Also check: amt is pure integer AND next is decimal fragment
+            amt_val = fields[amount_idx].strip() if amount_idx < len(fields) else ''
+            next_val = fields[amount_idx + 1].strip() if amount_idx + 1 < len(fields) else ''
+            
+            # Only repair if the pattern strongly suggests a split number
+            # Use strict thousands pattern: 1-2 digit prefix + exactly 3-digit group + optional decimal
+            if (re.match(r'^\d{1,2}$', amt_val) and
+                re.match(r'^\d{3}\.\d{1,2}$', next_val)):
+                # Pattern like "1" + "800.41" strongly suggests "1,800.41" was split
+                joined_amount = amt_val + next_val
+                new_fields = fields[:amount_idx] + [joined_amount] + fields[amount_idx+2:]
+                if len(new_fields) == header_fields - 1:
+                    new_fields.append('')
+                if len(new_fields) == header_fields:
+                    output = io.StringIO()
+                    writer = csv.writer(output)
+                    writer.writerow(new_fields)
+                    repaired.append(output.getvalue())
+                else:
+                    repaired.append(line)
+            else:
+                repaired.append(line)
+        else:
+            repaired.append(line)
+    
+    return repaired
 
 
 def process_csv_file(filepath, limit=None, user_id=None, column_mapping=None):
@@ -118,148 +209,149 @@ def process_csv_file(filepath, limit=None, user_id=None, column_mapping=None):
     transactions = []
 
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
+        # Repair CSV lines with unquoted numeric commas
+        repaired_lines = _repair_csv_lines(filepath)
+        reader = csv.DictReader(io.StringIO(''.join(repaired_lines)))
 
-            for i, row in enumerate(reader):
-                if limit and i >= limit:
-                    break
+        for i, row in enumerate(reader):
+            if limit and i >= limit:
+                break
 
-                if column_mapping:
-                    date_str   = row.get(column_mapping['date_col'], '')
-                    desc       = row.get(column_mapping['description_col'], '')
-                    cat_str    = row.get(column_mapping.get('category_col', ''), '') if column_mapping.get('category_col') else ''
+            if column_mapping:
+                date_str   = row.get(column_mapping['date_col'], '')
+                desc       = row.get(column_mapping['description_col'], '')
+                cat_str    = row.get(column_mapping.get('category_col', ''), '') if column_mapping.get('category_col') else ''
 
-                    # Handle amount: either single amount_col or separate debit/credit columns
-                    amount_str = ''
-                    type_hint = None
-                    debit_col = column_mapping.get('debit_col')
-                    credit_col = column_mapping.get('credit_col')
+                # Handle amount: either single amount_col or separate debit/credit columns
+                amount_str = ''
+                type_hint = None
+                debit_col = column_mapping.get('debit_col')
+                credit_col = column_mapping.get('credit_col')
 
-                    if debit_col or credit_col:
-                        # Separate debit/credit columns
-                        debit_val = row.get(debit_col, '').strip() if debit_col else ''
-                        credit_val = row.get(credit_col, '').strip() if credit_col else ''
-                        # Clean currency symbols
-                        debit_clean = debit_val.replace('$', '').replace(',', '').strip() if debit_val else ''
-                        credit_clean = credit_val.replace('$', '').replace(',', '').strip() if credit_val else ''
+                if debit_col or credit_col:
+                    # Separate debit/credit columns
+                    debit_val = row.get(debit_col, '').strip() if debit_col else ''
+                    credit_val = row.get(credit_col, '').strip() if credit_col else ''
+                    # Clean currency symbols
+                    debit_clean = debit_val.replace('$', '').replace(',', '').strip() if debit_val else ''
+                    credit_clean = credit_val.replace('$', '').replace(',', '').strip() if credit_val else ''
 
-                        try:
-                            debit_num = float(debit_clean) if debit_clean and debit_clean != '0' else 0
-                        except (ValueError, TypeError):
-                            debit_num = 0
-                        try:
-                            credit_num = float(credit_clean) if credit_clean and credit_clean != '0' else 0
-                        except (ValueError, TypeError):
-                            credit_num = 0
+                    try:
+                        debit_num = float(debit_clean) if debit_clean and debit_clean != '0' else 0
+                    except (ValueError, TypeError):
+                        debit_num = 0
+                    try:
+                        credit_num = float(credit_clean) if credit_clean and credit_clean != '0' else 0
+                    except (ValueError, TypeError):
+                        credit_num = 0
 
-                        if credit_num > 0:
-                            amount_str = str(credit_num)
-                            type_hint = 'credit'
-                        elif debit_num > 0:
-                            amount_str = str(debit_num)
-                            type_hint = 'debit'
-                        elif debit_num < 0:
-                            # Negative in debit column means credit
-                            amount_str = str(abs(debit_num))
-                            type_hint = 'credit'
-                        else:
-                            continue  # No amount found
+                    if credit_num > 0:
+                        amount_str = str(credit_num)
+                        type_hint = 'credit'
+                    elif debit_num > 0:
+                        amount_str = str(debit_num)
+                        type_hint = 'debit'
+                    elif debit_num < 0:
+                        # Negative in debit column means credit
+                        amount_str = str(abs(debit_num))
+                        type_hint = 'credit'
                     else:
-                        amount_str = row.get(column_mapping.get('amount_col', ''), '')
-
-                    # Collect extra columns into notes
-                    known = {column_mapping['date_col'], column_mapping['description_col']}
-                    if column_mapping.get('amount_col'):
-                        known.add(column_mapping['amount_col'])
-                    if column_mapping.get('category_col'):
-                        known.add(column_mapping['category_col'])
-                    if debit_col:
-                        known.add(debit_col)
-                    if credit_col:
-                        known.add(credit_col)
-                    notes = ' | '.join(f"{k}: {v}" for k, v in row.items() if k not in known and str(v).strip())
+                        continue  # No amount found
                 else:
-                    date_str   = (row.get('Date') or row.get('date') or row.get('Transaction Date')
-                                  or row.get('Post Date') or row.get('Posted Date') or '')
-                    desc       = (row.get('Description') or row.get('description')
-                                  or row.get('Transaction Description') or row.get('transaction description')
-                                  or row.get('Memo') or row.get('Payee') or row.get('payee') or '')
-                    cat_str    = row.get('Category') or row.get('category') or ''
-                    notes      = ''
-                    type_hint  = None
+                    amount_str = row.get(column_mapping.get('amount_col', ''), '')
 
-                    # Check for separate Debit/Credit columns
-                    debit_val = (row.get('Debit') or row.get('debit') or row.get('Withdrawals') or '').strip()
-                    credit_val = (row.get('Credit') or row.get('credit') or row.get('Deposits') or '').strip()
+                # Collect extra columns into notes
+                known = {column_mapping['date_col'], column_mapping['description_col']}
+                if column_mapping.get('amount_col'):
+                    known.add(column_mapping['amount_col'])
+                if column_mapping.get('category_col'):
+                    known.add(column_mapping['category_col'])
+                if debit_col:
+                    known.add(debit_col)
+                if credit_col:
+                    known.add(credit_col)
+                notes = ' | '.join(f"{k}: {v}" for k, v in row.items() if k not in known and str(v).strip())
+            else:
+                date_str   = (row.get('Date') or row.get('date') or row.get('Transaction Date')
+                              or row.get('Post Date') or row.get('Posted Date') or '')
+                desc       = (row.get('Description') or row.get('description')
+                              or row.get('Transaction Description') or row.get('transaction description')
+                              or row.get('Memo') or row.get('Payee') or row.get('payee') or '')
+                cat_str    = row.get('Category') or row.get('category') or ''
+                notes      = ''
+                type_hint  = None
 
-                    if debit_val or credit_val:
-                        debit_clean = debit_val.replace('$', '').replace(',', '') if debit_val else ''
-                        credit_clean = credit_val.replace('$', '').replace(',', '') if credit_val else ''
-                        try:
-                            debit_num = float(debit_clean) if debit_clean else 0
-                        except (ValueError, TypeError):
-                            debit_num = 0
-                        try:
-                            credit_num = float(credit_clean) if credit_clean else 0
-                        except (ValueError, TypeError):
-                            credit_num = 0
+                # Check for separate Debit/Credit columns
+                debit_val = (row.get('Debit') or row.get('debit') or row.get('Withdrawals') or '').strip()
+                credit_val = (row.get('Credit') or row.get('credit') or row.get('Deposits') or '').strip()
 
-                        if credit_num > 0:
-                            amount_str = str(credit_num)
-                            type_hint = 'credit'
-                        elif debit_num > 0:
-                            amount_str = str(debit_num)
-                            type_hint = 'debit'
-                        else:
-                            amount_str = (row.get('Amount') or row.get('amount')
-                                         or row.get('Transaction Amount') or row.get('transaction amount') or '')
+                if debit_val or credit_val:
+                    debit_clean = debit_val.replace('$', '').replace(',', '') if debit_val else ''
+                    credit_clean = credit_val.replace('$', '').replace(',', '') if credit_val else ''
+                    try:
+                        debit_num = float(debit_clean) if debit_clean else 0
+                    except (ValueError, TypeError):
+                        debit_num = 0
+                    try:
+                        credit_num = float(credit_clean) if credit_clean else 0
+                    except (ValueError, TypeError):
+                        credit_num = 0
+
+                    if credit_num > 0:
+                        amount_str = str(credit_num)
+                        type_hint = 'credit'
+                    elif debit_num > 0:
+                        amount_str = str(debit_num)
+                        type_hint = 'debit'
                     else:
                         amount_str = (row.get('Amount') or row.get('amount')
                                      or row.get('Transaction Amount') or row.get('transaction amount') or '')
+                else:
+                    amount_str = (row.get('Amount') or row.get('amount')
+                                  or row.get('Transaction Amount') or row.get('transaction amount') or '')
 
-                    # Check for a Type/Transaction Type column with text values
-                    if not type_hint:
-                        type_col_val = (row.get('Type') or row.get('type') or
-                                       row.get('Transaction Type') or row.get('Trans Type') or '')
-                        if type_col_val:
-                            type_hint = type_col_val
+                # Check for a Type/Transaction Type column with text values
+                if not type_hint:
+                    type_col_val = (row.get('Type') or row.get('type') or
+                                   row.get('Transaction Type') or row.get('Trans Type') or '')
+                    if type_col_val:
+                        type_hint = type_col_val
 
-                if not all([date_str, desc, amount_str]):
-                    continue
+            if not all([date_str, desc, amount_str]):
+                continue
 
-                transaction_date = _parse_date(str(date_str))
-                if transaction_date is None:
-                    continue
+            transaction_date = _parse_date(str(date_str))
+            if transaction_date is None:
+                continue
 
-                try:
-                    amount = float(str(amount_str).replace('$', '').replace(',', ''))
-                except (ValueError, TypeError):
-                    continue
+            try:
+                amount = float(str(amount_str).replace('$', '').replace(',', ''))
+            except (ValueError, TypeError):
+                continue
 
-                trans_type = detect_transaction_type(desc, amount, type_hint)
-                amount = abs(amount)
+            trans_type = detect_transaction_type(desc, amount, type_hint)
+            amount = abs(amount)
 
-                # Category: honour CSV value from template if present, else auto-detect
-                category_id = None
-                if cat_str and column_mapping:
-                    from app.models.category import Category
-                    cat = Category.query.filter_by(name=cat_str.strip(), user_id=user_id).first()
-                    if not cat:
-                        cat = Category.query.filter(Category.name.ilike(cat_str.strip())).first()
-                    if cat:
-                        category_id = cat.id
-                if not category_id:
-                    category_id = categorize_transaction(desc, user_id=user_id)
+            # Category: honour CSV value from template if present, else auto-detect
+            category_id = None
+            if cat_str and column_mapping:
+                from app.models.category import Category
+                cat = Category.query.filter_by(name=cat_str.strip(), user_id=user_id).first()
+                if not cat:
+                    cat = Category.query.filter(Category.name.ilike(cat_str.strip())).first()
+                if cat:
+                    category_id = cat.id
+            if not category_id:
+                category_id = categorize_transaction(desc, user_id=user_id)
 
-                transactions.append({
-                    'date': transaction_date,
-                    'description': desc.strip(),
-                    'amount': amount,
-                    'type': trans_type,
-                    'category_id': category_id,
-                    'notes': notes,
-                })
+            transactions.append({
+                'date': transaction_date,
+                'description': desc.strip(),
+                'amount': amount,
+                'type': trans_type,
+                'category_id': category_id,
+                'notes': notes,
+            })
 
         return transactions
 
