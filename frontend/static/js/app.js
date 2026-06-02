@@ -4376,9 +4376,9 @@ async function handleBtFileSelect(files) {
 }
 
 function populateBtColumnSelects(headers) {
-    ['btDateCol','btDescCol','btAmountCol','btCategoryCol','btDebitCol','btCreditCol'].forEach(id => {
+    ['btDateCol','btDescCol','btAmountCol','btCategoryCol','btDebitCol','btCreditCol','btTypeCol'].forEach(id => {
         const sel = document.getElementById(id);
-        const isOpt = ['btCategoryCol','btDebitCol','btCreditCol'].includes(id);
+        const isOpt = ['btCategoryCol','btDebitCol','btCreditCol','btTypeCol'].includes(id);
         sel.innerHTML = `<option value="">\u2014 ${isOpt ? 'none' : 'select'} \u2014</option>`;
         headers.forEach(h => {
             sel.innerHTML += `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`;
@@ -4401,6 +4401,7 @@ function autoFillBtMapping(headers) {
     document.getElementById('btCategoryCol').value = find(['category']);
     document.getElementById('btDebitCol').value   = find(['debit','debit amount','withdrawals','withdrawal']);
     document.getElementById('btCreditCol').value  = find(['credit','credit amount','deposits','deposit']);
+    document.getElementById('btTypeCol').value    = find(['transaction type','trans type','type']);
 }
 
 async function saveBankTemplate() {
@@ -4411,6 +4412,7 @@ async function saveBankTemplate() {
     const cat_col    = document.getElementById('btCategoryCol').value;
     const debit_col  = document.getElementById('btDebitCol').value;
     const credit_col = document.getElementById('btCreditCol').value;
+    const type_col   = document.getElementById('btTypeCol').value;
 
     if (!name)       { alert('Please enter a bank name.'); return; }
     if (!date_col)   { alert('Please select the Date column.'); return; }
@@ -4422,6 +4424,7 @@ async function saveBankTemplate() {
     if (cat_col) column_mapping.category_col = cat_col;
     if (debit_col) column_mapping.debit_col = debit_col;
     if (credit_col) column_mapping.credit_col = credit_col;
+    if (type_col) column_mapping.type_col = type_col;
 
     try {
         const isEdit = !!btEditingId;
@@ -4559,6 +4562,7 @@ function editBankTemplate(id) {
         document.getElementById('btCategoryCol').value = t.column_mapping.category_col || '';
         document.getElementById('btDebitCol').value = t.column_mapping.debit_col || '';
         document.getElementById('btCreditCol').value = t.column_mapping.credit_col || '';
+        document.getElementById('btTypeCol').value = t.column_mapping.type_col || '';
 
         // Update save button text
         document.getElementById('btSaveBtn').textContent = 'Update Template';

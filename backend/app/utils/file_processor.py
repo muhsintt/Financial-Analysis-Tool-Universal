@@ -202,6 +202,13 @@ def process_csv_file(filepath, limit=None, user_id=None, column_mapping=None):
                 type_hint = None
                 debit_col = column_mapping.get('debit_col')
                 credit_col = column_mapping.get('credit_col')
+                type_col = column_mapping.get('type_col')
+
+                # Check for Transaction Type column (e.g. "Credit"/"Debit" text values)
+                if type_col:
+                    type_col_val = row.get(type_col, '').strip()
+                    if type_col_val:
+                        type_hint = type_col_val
 
                 if debit_col or credit_col:
                     # Separate debit/credit columns
@@ -245,6 +252,8 @@ def process_csv_file(filepath, limit=None, user_id=None, column_mapping=None):
                     known.add(debit_col)
                 if credit_col:
                     known.add(credit_col)
+                if type_col:
+                    known.add(type_col)
                 notes = ' | '.join(f"{k}: {v}" for k, v in row.items() if k not in known and str(v).strip())
             else:
                 date_str   = (row.get('Date') or row.get('date') or row.get('Transaction Date')
