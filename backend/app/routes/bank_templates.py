@@ -46,8 +46,10 @@ def create_template():
         return jsonify({'error': 'name is required'}), 400
     if not headers:
         return jsonify({'error': 'headers are required'}), 400
-    if not mapping.get('date_col') or not mapping.get('description_col') or not mapping.get('amount_col'):
-        return jsonify({'error': 'column_mapping must include date_col, description_col, and amount_col'}), 400
+    if not mapping.get('date_col') or not mapping.get('description_col'):
+        return jsonify({'error': 'column_mapping must include date_col and description_col'}), 400
+    if not mapping.get('amount_col') and not mapping.get('debit_col') and not mapping.get('credit_col'):
+        return jsonify({'error': 'column_mapping must include amount_col or debit_col/credit_col'}), 400
 
     template = BankTemplate(
         name=name,
@@ -58,6 +60,35 @@ def create_template():
     db.session.add(template)
     db.session.commit()
     return jsonify(template.to_dict()), 201
+
+
+# ── update ────────────────────────────────────────────────────────────────────
+
+@bank_templates_bp.route('/<int:template_id>', methods=['PUT'])
+@write_required
+def update_template(template_id):
+    template = BankTemplate.query.filter_by(
+        id=template_id, user_id=session['user_id']
+    ).first_or_404()
+
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    headers = data.get('headers')
+    mapping = data.get('column_mapping')
+
+    if name:
+        template.name = name
+    if headers is not None:
+        template.headers = json.dumps(headers)
+    if mapping is not None:
+        if not mapping.get('date_col') or not mapping.get('description_col'):
+            return jsonify({'error': 'column_mapping must include date_col and description_col'}), 400
+        if not mapping.get('amount_col') and not mapping.get('debit_col') and not mapping.get('credit_col'):
+            return jsonify({'error': 'column_mapping must include amount_col or debit_col/credit_col'}), 400
+        template.column_mapping = json.dumps(mapping)
+
+    db.session.commit()
+    return jsonify(template.to_dict())
 
 
 # ── delete ────────────────────────────────────────────────────────────────────

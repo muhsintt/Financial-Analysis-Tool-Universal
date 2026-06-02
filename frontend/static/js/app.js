@@ -4319,6 +4319,7 @@ if (cancelBtn) {
 
 let btFileHeaders = [];
 let btCreatorInitialised = false;
+let btEditingId = null;  // Track which template is being edited
 
 function initBankTemplateCreator() {
     if (btCreatorInitialised) return;
@@ -4423,8 +4424,12 @@ async function saveBankTemplate() {
     if (credit_col) column_mapping.credit_col = credit_col;
 
     try {
-        const response = await apiFetch(`${API_URL}/bank-templates/`, {
-            method: 'POST',
+        const isEdit = !!btEditingId;
+        const url = isEdit ? `${API_URL}/bank-templates/${btEditingId}` : `${API_URL}/bank-templates/`;
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const response = await apiFetch(url, {
+            method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, headers: btFileHeaders, column_mapping })
         });
@@ -4433,7 +4438,7 @@ async function saveBankTemplate() {
             alert(err.error || 'Failed to save template');
             return;
         }
-        showNotification('Bank template saved!', 'success');
+        showNotification(isEdit ? 'Template updated!' : 'Bank template saved!', 'success');
         resetBtUI();
         loadBankTemplates();
     } catch (err) {
@@ -4443,12 +4448,15 @@ async function saveBankTemplate() {
 
 function resetBtUI() {
     btFileHeaders = [];
+    btEditingId = null;
     document.getElementById('btStep1').style.display = 'block';
     document.getElementById('btStep2').style.display = 'none';
     const fi = document.getElementById('btFileInput');
     if (fi) fi.value = '';
     const bn = document.getElementById('btBankName');
     if (bn) bn.value = '';
+    const saveBtn = document.getElementById('btSaveBtn');
+    if (saveBtn) saveBtn.textContent = 'Save Template';
 }
 
 async function loadBankTemplates() {
@@ -4496,6 +4504,9 @@ function displayBankTemplates(templates) {
                         <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);font-size:0.8rem;color:var(--text-muted,#888);">${(t.headers || []).join(', ')}</td>
                         <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);font-size:0.85rem;">${t.created_at ? t.created_at.substring(0, 10) : '\u2014'}</td>
                         <td style="padding:8px 12px;border-bottom:1px solid var(--border-color,#e0e0e0);text-align:center;">
+                            <button class="btn-icon edit" title="Edit template" onclick="editBankTemplate(${t.id})" style="margin-right:4px;">
+                                <i class="fas fa-edit"></i>
+                            </button>
                             <button class="btn-icon delete" title="Delete template" onclick="deleteBankTemplate(${t.id}, '${escapeHtml(t.name)}')">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -4521,6 +4532,39 @@ async function deleteBankTemplate(id, name) {
     } catch (err) {
         alert('Error: ' + err.message);
     }
+}
+
+function editBankTemplate(id) {
+    // Find the template from the displayed list
+    apiFetch(`${API_URL}/bank-templates/`).then(r => r.json()).then(templates => {
+        const t = templates.find(tmpl => tmpl.id === id);
+        if (!t) { alert('Template not found'); return; }
+
+        btEditingId = id;
+        btFileHeaders = t.headers || [];
+
+        // Show step 2 (the form), hide step 1 (file upload)
+        document.getElementById('btStep1').style.display = 'none';
+        document.getElementById('btStep2').style.display = 'block';
+
+        // Populate column selects with the template's headers
+        populateBtColumnSelects(btFileHeaders);
+        document.getElementById('btHeadersDisplay').textContent = btFileHeaders.join(', ');
+
+        // Fill in values
+        document.getElementById('btBankName').value = t.name;
+        document.getElementById('btDateCol').value = t.column_mapping.date_col || '';
+        document.getElementById('btDescCol').value = t.column_mapping.description_col || '';
+        document.getElementById('btAmountCol').value = t.column_mapping.amount_col || '';
+        document.getElementById('btCategoryCol').value = t.column_mapping.category_col || '';
+        document.getElementById('btDebitCol').value = t.column_mapping.debit_col || '';
+        document.getElementById('btCreditCol').value = t.column_mapping.credit_col || '';
+
+        // Update save button text
+        document.getElementById('btSaveBtn').textContent = 'Update Template';
+    }).catch(err => {
+        alert('Error loading template: ' + err.message);
+    });
 }
 
 // ==========================================
