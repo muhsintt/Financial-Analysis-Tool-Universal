@@ -412,18 +412,35 @@ const state = {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOMContentLoaded event fired');
 
-    // Scroll-to-top button visibility
+    // Scroll-to-top button visibility — attach to all potential scroll containers
     const scrollToTopBtn = document.getElementById('scrollToTopBtn');
     if (scrollToTopBtn) {
         const pageContent = document.querySelector('.page-content');
-        if (pageContent) {
-            pageContent.addEventListener('scroll', () => {
-                scrollToTopBtn.style.display = pageContent.scrollTop > 300 ? 'block' : 'none';
-            });
-            scrollToTopBtn.onclick = () => {
-                pageContent.scrollTo({ top: 0, behavior: 'smooth' });
-            };
+        const mainContent = document.querySelector('.main-content');
+
+        function handleScroll() {
+            const scrolled = (pageContent && pageContent.scrollTop > 300) ||
+                             (mainContent && mainContent.scrollTop > 300) ||
+                             window.scrollY > 300;
+            scrollToTopBtn.style.display = scrolled ? 'block' : 'none';
         }
+
+        function scrollToTop() {
+            if (pageContent && pageContent.scrollTop > 0) {
+                pageContent.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            if (mainContent && mainContent.scrollTop > 0) {
+                mainContent.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            if (window.scrollY > 0) {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        if (pageContent) pageContent.addEventListener('scroll', handleScroll);
+        if (mainContent) mainContent.addEventListener('scroll', handleScroll);
+        window.addEventListener('scroll', handleScroll);
+        scrollToTopBtn.onclick = scrollToTop;
     }
     
     // Check authentication first
