@@ -411,6 +411,14 @@ const state = {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOMContentLoaded event fired');
+
+    // Scroll-to-top button visibility
+    const scrollToTopBtn = document.getElementById('scrollToTopBtn');
+    if (scrollToTopBtn) {
+        window.addEventListener('scroll', () => {
+            scrollToTopBtn.style.display = window.scrollY > 300 ? 'block' : 'none';
+        });
+    }
     
     // Check authentication first
     await checkAuth();
