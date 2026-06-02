@@ -2011,7 +2011,7 @@ async function loadTransactions() {
         }
         
         state.transactions = transactions;
-        sortTransactions(state.sortConfig.field);
+        sortTransactions(state.sortConfig.field, true);
         console.log('=== loadTransactions() END ===');
     } catch (error) {
         console.error('=== ERROR in loadTransactions() ===', error);
@@ -2086,7 +2086,7 @@ function displayTransactions(transactions) {
 }
 
 // Sort Transactions
-function sortTransactions(field) {
+function sortTransactions(field, preserveDirection) {
     console.log('=== sortTransactions() START ===');
     console.log('Sort field:', field);
     console.log('state.transactions count:', state.transactions?.length || 'NULL/UNDEFINED');
@@ -2099,12 +2099,14 @@ function sortTransactions(field) {
         return;
     }
     
-    // Toggle direction if clicking the same field
-    if (state.sortConfig.field === field) {
-        state.sortConfig.direction = state.sortConfig.direction === 'asc' ? 'desc' : 'asc';
-    } else {
-        state.sortConfig.field = field;
-        state.sortConfig.direction = 'asc';
+    // Toggle direction if clicking the same field, unless preserving direction
+    if (!preserveDirection) {
+        if (state.sortConfig.field === field) {
+            state.sortConfig.direction = state.sortConfig.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            state.sortConfig.field = field;
+            state.sortConfig.direction = 'asc';
+        }
     }
     
     console.log('Sort configuration:', state.sortConfig);
